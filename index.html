@@ -578,34 +578,61 @@
             let fileReader = null;
 
             // Configuración de eventos para la carga de archivos
-            dropArea.addEventListener('click', () => fileInput.click());
+            // Configuración de eventos para la carga de archivos
 
-            fileInput.addEventListener('change', handleFileSelect);
+            // 1. Manejo del clic en el área (abre el selector)
+            dropArea.addEventListener('click', (e) => {
+                // Evitar bucles si el clic viene del input mismo
+                if (e.target !== fileInput) {
+                    fileInput.click();
+                }
+            });
 
+            // 2. Manejo del clic en el input (detener propagación y limpiar valor)
+            fileInput.addEventListener('click', (e) => {
+                e.stopPropagation(); // Importante para evitar que suba al dropArea y cause doble clic
+                fileInput.value = ''; // Permite seleccionar el mismo archivo de nuevo if necesario
+            });
+
+            // 3. Manejo del cambio en el input (selección estándar)
+            fileInput.addEventListener('change', (e) => {
+                if (fileInput.files && fileInput.files.length > 0) {
+                    processFile(fileInput.files[0]);
+                }
+            });
+
+            // 4. Manejo de Drag & Drop
             dropArea.addEventListener('dragover', (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 dropArea.classList.add('active');
             });
 
-            dropArea.addEventListener('dragleave', () => {
+            dropArea.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 dropArea.classList.remove('active');
             });
 
             dropArea.addEventListener('drop', (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 dropArea.classList.remove('active');
 
-                if (e.dataTransfer.files.length) {
-                    fileInput.files = e.dataTransfer.files;
-                    handleFileSelect(e);
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    // Intento de sincronizar (opcional, pero buena práctica si el navegador lo permite)
+                    try {
+                        fileInput.files = e.dataTransfer.files;
+                    } catch (err) {
+                        console.log('No se pudo sincronizar input.files (limitación del navegador), pero procesando archivo igualmente.');
+                    }
+                    processFile(e.dataTransfer.files[0]);
                 }
             });
 
-            // Manejar la selección de archivos
-            function handleFileSelect(e) {
-                // Determine if it's a drag event or input change event
-                const files = e.target.files || (e.dataTransfer ? e.dataTransfer.files : null);
-                selectedFile = files ? files[0] : null;
+            // Función centralizada para procesar el archivo
+            function processFile(file) {
+                selectedFile = file;
 
                 if (selectedFile) {
                     fileName.textContent = selectedFile.name;
@@ -616,7 +643,7 @@
                     // Advertencia de memoria para archivos grandes (>500MB)
                     if (selectedFile.size > 500 * 1024 * 1024) {
                         statusMessage.textContent = 'Advertencia: Archivos mayores a 500MB pueden causar problemas de memoria en el navegador.';
-                        statusMessage.className = 'status error'; // Usamos estilo de error para visibilidad
+                        statusMessage.className = 'status error';
                         statusMessage.style.display = 'block';
                     } else {
                         statusMessage.style.display = 'none';
