@@ -1104,13 +1104,22 @@
                                         );
                                         receivedData.push(decrypted);
                                         receivedBytes += decrypted.byteLength;
-                                        // Comprobar si hemos recibido todo
+
+                                        log(`Chunk recibido. Total: ${receivedBytes} / ${fileMeta.size} bytes`, 'info');
+
+                                        // Comprobar si hemos recibido todo (con margen de error)
                                         if (receivedBytes >= fileMeta.size) {
                                             log('Transferencia completada exitosamente.', 'success');
                                             receiverStatus.textContent = 'Archivo recibido. Listo para descargar.';
                                             receiverStatus.className = 'status success';
                                             receiverStatus.style.display = 'block';
+
+                                            // Habilitar botón de descarga
                                             downloadBtn.disabled = false;
+                                            downloadBtn.setAttribute('aria-disabled', 'false');
+
+                                            log('Botón de descarga habilitado.', 'success');
+
                                             // Preparar el archivo para descarga
                                             downloadBtn.onclick = () => {
                                                 const blob = new Blob(receivedData, { type: fileMeta.mimeType });
