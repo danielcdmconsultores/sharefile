@@ -26,6 +26,35 @@
             padding: 0;
         }
 
+        .log-container {
+            margin-top: 2rem;
+            padding: 1rem;
+            background-color: #212529;
+            color: #00ff00;
+            border-radius: 8px;
+            font-family: monospace;
+            height: 150px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            display: none;
+        }
+
+        .log-entry {
+            margin-bottom: 2px;
+        }
+
+        .log-info {
+            color: #4cc9f0;
+        }
+
+        .log-error {
+            color: #ff0000;
+        }
+
+        .log-success {
+            color: #00ff00;
+        }
+
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             line-height: 1.6;
@@ -496,7 +525,44 @@
             const receiverStatus = document.getElementById('receiverStatus');
             const cancelSendBtn = document.getElementById('cancelSendBtn');
             const cancelReceiveBtn = document.getElementById('cancelReceiveBtn');
+            const connectionLogs = document.getElementById('connectionLogs');
+            const toggleLogsBtn = document.getElementById('toggleLogsBtn');
 
+            // Logging function
+            function log(message, type = 'info') {
+                const entry = document.createElement('div');
+                entry.className = `log-entry log-${type}`;
+                const time = new Date().toLocaleTimeString();
+                entry.textContent = `[${time}] ${message}`;
+                connectionLogs.appendChild(entry);
+                connectionLogs.scrollTop = connectionLogs.scrollHeight;
+            }
+
+            toggleLogsBtn.addEventListener('click', () => {
+                if (connectionLogs.style.display === 'none' || !connectionLogs.style.display) {
+                    connectionLogs.style.display = 'block';
+                    toggleLogsBtn.textContent = 'Ocultar Logs';
+                } else {
+                    connectionLogs.style.display = 'none';
+                    toggleLogsBtn.textContent = 'Ver Logs de Conexión';
+                }
+            });
+
+            // Configuración PeerJS con servidores STUN públicos de Google
+            const peerConfig = {
+                debug: 2,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun3.l.google.com:19302' },
+                        { urls: 'stun:stun4.l.google.com:19302' }
+                    ]
+                }
+            };
+
+            // Variables para el funcionamiento
             // Variables para el funcionamiento
             let selectedFile = null;
             let peer = null;
@@ -585,11 +651,16 @@
                         shareLink.style.display = 'block';
 
                         // Inicializar PeerJS
-                        peer = new Peer(channelId);
+                        peer = new Peer(channelId, peerConfig);
+
+                        log(`Inicializando Peer como emisor con ID: ${channelId}`);
+
                         peer.on('open', (id) => {
+                            log(`Peer emisor abierto. ID: ${id}`, 'success');
                             peer.on('connection', (conn) => {
+                                log('Conexión entrante detectada...', 'info');
                                 connection = conn;
-                                statusMessage.textContent = 'Destinatario conectado. Preparando transferencia...';
+                                statusMessage.textContent = 'Destinatario conectado. Estableciendo canal seguro...';
                                 statusMessage.className = 'status success';
                                 statusMessage.style.display = 'block';
                                 setupDataChannel();
@@ -609,7 +680,26 @@
                 dataChannel = connection;
 
                 dataChannel.on('open', () => {
+                    log('Canal de datos abierto (Emisor).', 'success');
+                    // Esperar un poco para asegurar estabilidad
+                    setTimeout(() => {
+                        log('Enviando ping de control...', 'info');
+                        // No enviamos metadatos aún, esperamos confirmación
+                        dataChannel.send({ type: 'ping' });
+                    }, 500);
+                });
+
+                dataChannel.on('data', (data) => {
+                    // Manejar mensajes de control del receptor
+                    if (data && data.type === 'pong') {
+                        log('Recibido PONG del receptor. Iniciando transferencia...', 'success');
+                        startFileTransfer();
+                    }
+                });
+
+                function startFileTransfer() {
                     // Enviar metadatos del archivo primero
+                    log(`Enviando metadatos: ${selectedFile.name} (${selectedFile.size} bytes)`, 'info');
                     dataChannel.send({
                         type: 'metadata',
                         name: selectedFile.name,
@@ -623,15 +713,17 @@
                     transferStartTime = Date.now();
                     isTransferring = true;
                     sendFile();
-                });
+                }
 
                 dataChannel.on('close', () => {
+                    log('El canal de datos se ha cerrado.', 'warning');
                     statusMessage.textContent = 'Conexión cerrada';
                     statusMessage.className = 'status';
                     statusMessage.style.display = 'block';
                 });
 
                 dataChannel.on('error', (err) => {
+                    log(`Error en DataChannel: ${err.message}`, 'error');
                     statusMessage.textContent = `Error en la transferencia: ${err.message}`;
                     statusMessage.className = 'status error';
                     statusMessage.style.display = 'block';
@@ -768,19 +860,28 @@
                 ).then(key => {
                     receiverKey = key;
 
-                    peer = new Peer();
+                    peer = new Peer(null, peerConfig);
+
                     peer.on('open', (id) => {
-                        connection = peer.connect(channel, { reliable: true });
+                        log(`Peer receptor abierto con ID temporal: ${id}`, 'info');
+                        log(`Intentando conectar a canal: ${channel}`, 'info');
+
+                        connection = peer.connect(channel, {
+                            reliable: true,
+                            serialization: 'binary' // Asegurar serialización correcta
+                        });
 
                         if (!connection) {
-                            receiverStatus.textContent = 'Error al conectar con el remitente';
+                            log('No se pudo crear el objeto de conexión.', 'error');
+                            receiverStatus.textContent = 'Error al crear conexión.';
                             receiverStatus.className = 'status error';
                             receiverStatus.style.display = 'block';
                             return;
                         }
 
                         connection.on('open', () => {
-                            receiverStatus.textContent = 'Conectado al remitente. Esperando archivo...';
+                            log('Conexión establecida con el emisor.', 'success');
+                            receiverStatus.textContent = 'Conectado. Esperando handshake...';
                             receiverStatus.className = 'status success';
                             receiverStatus.style.display = 'block';
 
@@ -789,8 +890,17 @@
                             let fileMeta = null;
 
                             connection.on('data', async (data) => {
+                                // Handshake
+                                if (data && data.type === 'ping') {
+                                    log('Recibido PING. Enviando PONG...', 'info');
+                                    connection.send({ type: 'pong' });
+                                    receiverStatus.textContent = 'Conexión verificada. Esperando archivo...';
+                                    return;
+                                }
+
                                 // Si son metadatos
                                 if (typeof data === 'object' && data.type === 'metadata') {
+                                    log(`Recibidos metadatos: ${data.name}`, 'info');
                                     fileMeta = data;
                                     waitingFileName.textContent = data.name;
                                     waitingFileSize.textContent = formatFileSize(data.size);
@@ -822,12 +932,13 @@
                                         receivedBytes += decrypted.byteLength;
                                         // Comprobar si hemos recibido todo
                                         if (receivedBytes >= fileMeta.size) {
+                                            log('Transferencia completada exitosamente.', 'success');
                                             receiverStatus.textContent = 'Archivo recibido. Listo para descargar.';
                                             receiverStatus.className = 'status success';
                                             receiverStatus.style.display = 'block';
                                             downloadBtn.disabled = false;
                                             // Preparar el archivo para descarga
-                                            downloadBtn.addEventListener('click', () => {
+                                            downloadBtn.onclick = () => {
                                                 const blob = new Blob(receivedData, { type: fileMeta.mimeType });
                                                 const url = URL.createObjectURL(blob);
                                                 const a = document.createElement('a');
@@ -837,9 +948,10 @@
                                                 a.click();
                                                 document.body.removeChild(a);
                                                 URL.revokeObjectURL(url);
-                                            });
+                                            };
                                         }
                                     } catch (e) {
+                                        log(`Error al descifrar chunk: ${e}`, 'error');
                                         receiverStatus.textContent = 'Error al descifrar chunk.';
                                         receiverStatus.className = 'status error';
                                         receiverStatus.style.display = 'block';
@@ -857,7 +969,8 @@
                     });
 
                     peer.on('error', (err) => {
-                        receiverStatus.textContent = `Error: ${err.type}`;
+                        log(`Error en Peer receptor: ${err.type} - ${err.message}`, 'error');
+                        receiverStatus.textContent = `Error: ${err.type}. Revise los logs.`;
                         receiverStatus.className = 'status error';
                         receiverStatus.style.display = 'block';
                     });
@@ -918,7 +1031,6 @@
         });
     </script>
 
-    <!-- Cargar PeerJS desde CDN -->
     <!-- Cargar PeerJS desde CDN -->
     <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js" defer></script>
 </body>
