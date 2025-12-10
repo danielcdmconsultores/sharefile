@@ -963,7 +963,12 @@
 
                     if (offset < selectedFile.size) {
                         if (isTransferring) {
-                            readNextChunk();
+                            // Pequeño delay para evitar saturar el buffer
+                            setTimeout(() => {
+                                if (isTransferring) {
+                                    readNextChunk();
+                                }
+                            }, 10);
                         }
                     } else {
                         // Transferencia completada
@@ -1082,14 +1087,9 @@
                                     receiverTransferredSize.textContent = `0 B / ${formatFileSize(data.size)}`;
                                     return;
                                 }
-                                // Si es progreso
+                                // Si es progreso del emisor (solo para log, no para UI)
                                 if (typeof data === 'object' && data.type === 'progress' && fileMeta) {
-                                    // Actualizar barra de progreso sincronizada
-                                    const offset = data.offset;
-                                    const progress = (offset / fileMeta.size) * 100;
-                                    receiverProgressBar.style.width = `${progress}%`;
-                                    receiverProgressText.textContent = `${progress.toFixed(1)}%`;
-                                    receiverTransferredSize.textContent = `${formatFileSize(offset)} / ${formatFileSize(fileMeta.size)}`;
+                                    log(`Emisor reporta progreso: ${formatFileSize(data.offset)} / ${formatFileSize(fileMeta.size)}`, 'info');
                                     return;
                                 }
                                 // Si es un chunk cifrado
@@ -1105,7 +1105,13 @@
                                         receivedData.push(decrypted);
                                         receivedBytes += decrypted.byteLength;
 
-                                        log(`Chunk recibido. Total: ${receivedBytes} / ${fileMeta.size} bytes`, 'info');
+                                        // Actualizar progreso basado en bytes REALMENTE recibidos
+                                        const progress = (receivedBytes / fileMeta.size) * 100;
+                                        receiverProgressBar.style.width = `${progress}%`;
+                                        receiverProgressText.textContent = `${progress.toFixed(1)}%`;
+                                        receiverTransferredSize.textContent = `${formatFileSize(receivedBytes)} / ${formatFileSize(fileMeta.size)}`;
+
+                                        log(`Chunk recibido. Total: ${receivedBytes} / ${fileMeta.size} bytes (${progress.toFixed(1)}%)`, 'info');
 
                                         // Comprobar si hemos recibido todo (con margen de error)
                                         if (receivedBytes >= fileMeta.size) {
