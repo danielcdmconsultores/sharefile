@@ -603,7 +603,9 @@
 
             // Manejar la selección de archivos
             function handleFileSelect(e) {
-                selectedFile = e.target.files[0] || e.dataTransfer.files[0];
+                // Determine if it's a drag event or input change event
+                const files = e.target.files || (e.dataTransfer ? e.dataTransfer.files : null);
+                selectedFile = files ? files[0] : null;
 
                 if (selectedFile) {
                     fileName.textContent = selectedFile.name;
