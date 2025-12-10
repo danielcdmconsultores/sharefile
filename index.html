@@ -1042,7 +1042,7 @@
 
                         connection = peer.connect(channel, {
                             reliable: true,
-                            serialization: 'binary' // Asegurar serialización correcta
+                            serialization: 'json' // Usar JSON para objetos de control y metadatos
                         });
 
                         if (!connection) {
