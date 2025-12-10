@@ -908,7 +908,7 @@
             function sendFile() {
                 if (!isTransferring) return;
 
-                const chunkSize = 16384; // 16KB
+                const chunkSize = 4096; // 4KB - Tamaño seguro para canal JSON de PeerJS
                 fileReader = new FileReader();
                 let offset = 0;
 
@@ -930,9 +930,6 @@
                     // Enviar el chunk cifrado y su IV
                     dataChannel.send({ type: 'chunk', iv: Array.from(chunkIV), data: Array.from(new Uint8Array(encrypted)) });
                     offset += chunk.byteLength;
-
-                    // Enviar progreso al receptor
-                    dataChannel.send({ type: 'progress', offset });
 
                     // Actualizar progreso local
                     const progress = (offset / selectedFile.size) * 100;
@@ -963,12 +960,12 @@
 
                     if (offset < selectedFile.size) {
                         if (isTransferring) {
-                            // Pequeño delay para evitar saturar el buffer
+                            // Pequeño delay para dar tiempo al receptor a procesar
                             setTimeout(() => {
                                 if (isTransferring) {
                                     readNextChunk();
                                 }
-                            }, 10);
+                            }, 50);
                         }
                     } else {
                         // Transferencia completada
@@ -1069,6 +1066,9 @@
                             let fileMeta = null;
 
                             connection.on('data', async (data) => {
+                                // DEBUG: Log todos los mensajes recibidos
+                                log(`📨 Mensaje recibido - Tipo: ${data?.type || 'desconocido'}, Es objeto: ${typeof data === 'object'}`, 'info');
+
                                 // Handshake
                                 if (data && data.type === 'ping') {
                                     log('Recibido PING. Enviando PONG...', 'info');
@@ -1107,11 +1107,17 @@
 
                                         // Actualizar progreso basado en bytes REALMENTE recibidos
                                         const progress = (receivedBytes / fileMeta.size) * 100;
-                                        receiverProgressBar.style.width = `${progress}%`;
-                                        receiverProgressText.textContent = `${progress.toFixed(1)}%`;
-                                        receiverTransferredSize.textContent = `${formatFileSize(receivedBytes)} / ${formatFileSize(fileMeta.size)}`;
 
-                                        log(`Chunk recibido. Total: ${receivedBytes} / ${fileMeta.size} bytes (${progress.toFixed(1)}%)`, 'info');
+                                        // Obtener elementos frescos para asegurar que existen
+                                        const progBar = document.getElementById('receiverProgressBar');
+                                        const progText = document.getElementById('receiverProgressText');
+                                        const progSize = document.getElementById('receiverTransferredSize');
+
+                                        if (progBar) progBar.style.width = `${progress}%`;
+                                        if (progText) progText.textContent = `${progress.toFixed(1)}%`;
+                                        if (progSize) progSize.textContent = `${formatFileSize(receivedBytes)} / ${formatFileSize(fileMeta.size)}`;
+
+                                        log(`Chunk ${receivedData.length}: ${receivedBytes}/${fileMeta.size} bytes (${progress.toFixed(1)}%)`, 'info');
 
                                         // Comprobar si hemos recibido todo (con margen de error)
                                         if (receivedBytes >= fileMeta.size) {
