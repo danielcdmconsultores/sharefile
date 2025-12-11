@@ -31,7 +31,7 @@
         <header class="app-header">
             <div class="logo">
                 <i class="ph-fill ph-paper-plane-tilt"></i>
-                <span>Share<span class="highlight">2026</span></span>
+                <span>ShareFile<span class="highlight">Peer2Peer</span></span>
             </div>
             <div id="connection-status" class="status-badge disconnected">
                 <div class="status-dot"></div>
@@ -112,6 +112,22 @@
                 <button id="reset-btn" class="btn-secondary">Send Another</button>
             </div>
         </section>
+
+        <div id="version-display"
+            style="margin-top: 1rem; text-align: center; font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">
+        </div>
+        <script>
+            (function () {
+                const date = new Date(document.lastModified);
+                const day = String(date.getDate()).padStart(2, '0');
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const year = date.getFullYear();
+                const hours = String(date.getHours()).padStart(2, '0');
+                const minutes = String(date.getMinutes()).padStart(2, '0');
+                const version = `v ${day}${month}${year}.${hours}${minutes} daniel peña`;
+                document.getElementById('version-display').textContent = version;
+            })();
+        </script>
     </main>
 
     <script src="script.js"></script>
