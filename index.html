@@ -399,9 +399,39 @@
             </div>
 
             <label for="ice-servers">ICE Verify Configuration (JSON):</label>
-            <textarea id="ice-servers-input" spellcheck="false"></textarea>
+            <textarea id="ice-servers-input" spellcheck="false" placeholder='[{"urls":"stun:..."}]'></textarea>
+
+            <div style="margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 1rem;">
+                <h3>Advanced Signaling</h3>
+                <div class="input-group">
+                    <label>Signaling Server Host (leave empty for PeerJS Cloud):</label>
+                    <input type="text" id="sig-host" placeholder="0.peerjs.com">
+                </div>
+                <div style="display: flex; gap: 1rem;">
+                    <div class="input-group" style="flex: 1;">
+                        <label>Port:</label>
+                        <input type="text" id="sig-port" placeholder="443">
+                    </div>
+                    <div class="input-group" style="flex: 1;">
+                        <label>Path:</label>
+                        <input type="text" id="sig-path" placeholder="/">
+                    </div>
+                </div>
+                <div class="input-group" style="display: flex; align-items: center; gap: 0.5rem;">
+                    <input type="checkbox" id="sig-secure" checked style="width: auto;">
+                    <label style="margin:0; display:inline;">Secure (SSL/TLS)</label>
+                </div>
+                <div class="input-group" style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem;">
+                    <input type="checkbox" id="force-relay" style="width: auto;">
+                    <label style="margin:0; display:inline; color: #facc15;">Force TURN/Relay (Requires TURN
+                        config)</label>
+                </div>
+            </div>
 
             <div class="modal-footer">
+                <button class="btn" onclick="applyTemplate('twilio')">Twilio Tpl</button>
+                <button class="btn" onclick="applyTemplate('coturn')">Local Coturn</button>
+                <div style="flex-grow:1"></div>
                 <button class="btn" style="background-color: var(--surface); border: 1px solid var(--border);"
                     onclick="closeSettings()">Cancel</button>
                 <button class="btn" onclick="saveSettings()">Save & Reload</button>
@@ -422,7 +452,8 @@
             chunkSize: 64 * 1024, // 64KB chunks
             // Base config, ICE servers will be injected dynamically
             peerConfig: {
-                debug: 1
+                debug: 1,
+                width: 640 // Just a generic slot, we overwrite mostly
             }
         };
 
@@ -438,6 +469,9 @@
         const STATE = {
             peer: null,
             conn: null,
+            retryCount: 0,
+            maxRetries: 3,
+            config: {}, // Loaded config
             myId: null,
             mode: 'sender', // 'sender' | 'receiver'
             key: null, // CryptoKey
@@ -564,24 +598,34 @@
         }
 
         function initPeer(customId = null, targetId = null) {
+            STATE.config = loadConfig();
             logger.log(`Initializing PeerJS (${STATE.mode})...`, 'info', 'PeerJS');
 
-            // Load Custom ICE config
-            const iceServers = getIceServers();
+            const iceServers = STATE.config.iceServers;
             const peerOptions = {
-                ...CONFIG.peerConfig,
+                debug: 2,
                 config: {
-                    iceServers: iceServers
+                    iceServers: iceServers,
+                    iceTransportPolicy: STATE.config.forceRelay ? 'relay' : 'all'
                 }
             };
 
-            logger.details(`Loaded ${iceServers.length} ICE Servers.`);
+            // Apply Signaling Config
+            if (STATE.config.host) {
+                peerOptions.host = STATE.config.host;
+                peerOptions.port = STATE.config.port;
+                peerOptions.path = STATE.config.path;
+                peerOptions.secure = STATE.config.secure;
+            }
+
+            logger.details(`Loaded ${iceServers.length} ICE Servers. Policy: ${peerOptions.config.iceTransportPolicy}`);
+
             // Check for TURN
             const hasTurn = iceServers.some(s => s.urls && (s.urls.startsWith('turn:') || (Array.isArray(s.urls) && s.urls.some(u => u.startsWith('turn:')))));
             if (hasTurn) logger.success("TURN/Relay server configured.", 'Config');
+            if (STATE.config.forceRelay && !hasTurn) logger.error("Force Relay is ON but no TURN server found! Connection will likely fail.", 'Config');
 
-            // Log Server Config (Implicit or Explicit)
-            const serverInfo = peerOptions.host ? `${peerOptions.host}:${peerOptions.port}` : "0.peerjs.com (Public Cloud)";
+            const serverInfo = peerOptions.host ? `${peerOptions.host}:${peerOptions.port}${peerOptions.path}` : "0.peerjs.com (Public Cloud)";
             logger.details(`Signaling Server: ${serverInfo}`);
 
             try {
@@ -610,15 +654,36 @@
 
             STATE.peer.on('error', (err) => {
                 logger.error(`Peer Error: ${err.type} - ${err.message}`, 'PeerJS');
+
                 if (err.type === 'peer-unavailable') {
-                    logger.error("Peer unavailable. Ensure Sender is still online and tab is open.", 'Connection');
+                    logger.error("Peer unavailable. Sender might be offline or ID is wrong.", 'Connection');
+                }
+
+                // Retry Logic
+                if (['network', 'server-error', 'socket-error', 'socket-closed'].includes(err.type)) {
+                    handleRetry(targetId);
                 }
             });
 
             STATE.peer.on('disconnected', () => {
-                logger.error("Disconnected from signalling server. Reconnecting...", 'Network');
+                logger.error("Disconnected from signalling server. Attempting reconnect...", 'Network');
                 STATE.peer.reconnect();
             });
+        }
+
+        function handleRetry(targetId) {
+            if (STATE.retryCount < STATE.maxRetries) {
+                STATE.retryCount++;
+                const delay = STATE.retryCount * 2000;
+                logger.net(`Connection failed. Retrying in ${delay / 1000}s (Attempt ${STATE.retryCount}/${STATE.maxRetries})...`);
+                setTimeout(() => {
+                    if (STATE.peer.disconnected) STATE.peer.reconnect();
+                    else if (STATE.mode === 'receiver' && targetId) connectToPeer(targetId);
+                }, delay);
+            } else {
+                logger.error("Max retries reached. Connection failed.", 'Fatal');
+                logger.details("Try switching Signaling Server or adding a TURN server in settings.");
+            }
         }
 
         // --- Sender Logic ---
@@ -990,21 +1055,35 @@
         window.onload = init;
 
         // --- Settings Logic ---
-        function getIceServers() {
-            const saved = localStorage.getItem('p2p_ice_servers');
-            if (saved) {
-                try {
-                    return JSON.parse(saved);
-                } catch (e) {
-                    console.error("Bad ICE config", e);
-                }
+        function loadConfig() {
+            const savedIce = localStorage.getItem('p2p_ice_servers');
+            const savedSig = localStorage.getItem('p2p_sig_config');
+
+            let ice = DEFAULT_ICE;
+            if (savedIce) {
+                try { ice = JSON.parse(savedIce); } catch (e) { }
             }
-            return DEFAULT_ICE;
+
+            let sig = { host: '', port: '', path: '', secure: true, forceRelay: false };
+            if (savedSig) {
+                try { sig = JSON.parse(savedSig); } catch (e) { }
+            }
+
+            return {
+                iceServers: ice,
+                ...sig
+            };
         }
 
         function openSettings() {
-            const servers = getIceServers();
-            document.getElementById('ice-servers-input').value = JSON.stringify(servers, null, 2);
+            const config = loadConfig();
+            document.getElementById('ice-servers-input').value = JSON.stringify(config.iceServers, null, 2);
+            document.getElementById('sig-host').value = config.host || '';
+            document.getElementById('sig-port').value = config.port || '';
+            document.getElementById('sig-path').value = config.path || '';
+            document.getElementById('sig-secure').checked = config.secure;
+            document.getElementById('force-relay').checked = config.forceRelay;
+
             document.getElementById('settings-modal').classList.remove('hidden');
         }
 
@@ -1013,21 +1092,54 @@
         }
 
         function saveSettings() {
-            const input = document.getElementById('ice-servers-input').value;
+            const inputIce = document.getElementById('ice-servers-input').value;
+            const host = document.getElementById('sig-host').value.trim();
+            const port = document.getElementById('sig-port').value.trim();
+            const path = document.getElementById('sig-path').value.trim();
+            const secure = document.getElementById('sig-secure').checked;
+            const forceRelay = document.getElementById('force-relay').checked;
+
             try {
-                const parsed = JSON.parse(input);
-                if (!Array.isArray(parsed)) throw new Error("Must be an array");
-                localStorage.setItem('p2p_ice_servers', JSON.stringify(parsed));
+                // Save ICE
+                const parsedIce = JSON.parse(inputIce);
+                if (!Array.isArray(parsedIce)) throw new Error("ICE Config must be an array");
+                localStorage.setItem('p2p_ice_servers', JSON.stringify(parsedIce));
+
+                // Save Sig
+                const sigConfig = { host, port, path, secure, forceRelay };
+                localStorage.setItem('p2p_sig_config', JSON.stringify(sigConfig));
+
                 location.reload(); // Reload to apply
             } catch (e) {
-                alert("Invalid JSON: " + e.message);
+                alert("Invalid JSON/Config: " + e.message);
             }
         }
 
         function resetDefaultIce() {
-            if (confirm("Reset to default STUN servers?")) {
+            if (confirm("Reset all settings to default?")) {
                 localStorage.removeItem('p2p_ice_servers');
+                localStorage.removeItem('p2p_sig_config');
                 openSettings(); // Refresh view
+            }
+        }
+
+        function applyTemplate(type) {
+            if (type === 'twilio') {
+                const tpl = [
+                    { "urls": "stun:global.stun.twilio.com:3478" },
+                    { "urls": "turn:global.turn.twilio.com:3478?transport=udp", "username": "YOUR_USER", "credential": "YOUR_PASSWORD" }
+                ];
+                document.getElementById('ice-servers-input').value = JSON.stringify(tpl, null, 2);
+            } else if (type === 'coturn') {
+                const tpl = [
+                    { "urls": "stun:your-server.com:3478" },
+                    { "urls": "turn:your-server.com:3478", "username": "user", "credential": "password" }
+                ];
+                document.getElementById('ice-servers-input').value = JSON.stringify(tpl, null, 2);
+                document.getElementById('sig-host').value = "your-server.com";
+                document.getElementById('sig-port').value = "9000";
+                document.getElementById('sig-path').value = "/peerjs";
+                document.getElementById('sig-secure').checked = false;
             }
         }
     </script>
