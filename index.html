@@ -56,6 +56,7 @@
             text-align: center;
             background: linear-gradient(to right, #60a5fa, #a78bfa);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 2rem;
         }
@@ -182,13 +183,53 @@
         }
 
         .share-link-box {
-            background-color: var(--bg);
-            padding: 1rem;
-            border-radius: 8px;
-            word-break: break-all;
+            background-color: var(--surface);
+            padding: 1.5rem;
+            border-radius: 12px;
             margin-top: 1rem;
             border: 1px solid var(--border);
-            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .copy-input-group {
+            display: flex;
+            gap: 0.5rem;
+            width: 100%;
+        }
+
+        .copy-input {
+            flex-grow: 1;
+            background-color: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            cursor: text;
+        }
+
+        .btn-copy {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 0 1.5rem;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.2s;
+        }
+
+        .btn-copy:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-copy.copied {
+            background-color: var(--success);
         }
     </style>
 </head>
@@ -285,8 +326,10 @@
                 div.scrollTop = div.scrollHeight;
                 console.log(`[${type}]`, msg);
             },
-            error: (msg) => logger.log(msg, 'error'),
-            success: (msg) => logger.log(msg, 'success') // CSS class not defined but inherits default color
+            ping: (ms) => logger.log(`⚡ RTT: ${ms}ms`, 'info'),
+            net: (msg) => logger.log(`🌐 ${msg}`, 'info'),
+            error: (msg) => logger.log(`❌ ${msg}`, 'error'),
+            success: (msg) => logger.log(`✅ ${msg}`, 'success')
         };
 
         // --- Crypto Utils ---
@@ -417,19 +460,27 @@
             logger.log(`Incoming connection from ${conn.peer}`);
 
             conn.on('open', () => {
-                logger.log("Connection established!");
+                logger.success("Connection established!");
                 STATE.conn = conn;
-                // If file is ready, user can start, or we auto-start? 
-                // Better trigger: Wait for 'ready' signal from receiver
+
+                // Monitor connection health
+                monitorConnection(conn);
             });
 
             conn.on('data', async (data) => {
-                logger.log(`Received signal: ${data.type}`);
-                if (data.type === 'request-start') {
-                    if (STATE.file) {
-                        sendFile(conn);
-                    } else {
-                        conn.send({ type: 'error', message: 'No file selected on sender.' });
+                if (data.type === 'ping') {
+                    conn.send({ type: 'pong', timestamp: data.timestamp });
+                } else if (data.type === 'pong') {
+                    const rtt = Date.now() - data.timestamp;
+                    logger.ping(rtt);
+                } else {
+                    logger.log(`Received signal: ${data.type}`);
+                    if (data.type === 'request-start') {
+                        if (STATE.file) {
+                            sendFile(conn);
+                        } else {
+                            conn.send({ type: 'error', message: 'No file selected on sender.' });
+                        }
                     }
                 }
             });
@@ -454,7 +505,17 @@
             const link = `${baseUrl}#connect=${STATE.myId}&key=${keyStr}`;
 
             const linkBox = document.getElementById('share-link');
-            linkBox.innerHTML = `<a href="${link}" target="_blank">${link}</a> <button onclick="navigator.clipboard.writeText('${link}')" style="margin-left:10px; padding:2px 5px; cursor:pointer;" title="Copy">📋</button>`;
+
+            // New UX for Copy Link
+            linkBox.innerHTML = `
+                <div class="copy-input-group">
+                    <input type="text" class="copy-input" readonly value="${link}" id="share-link-input" onclick="this.select()">
+                    <button class="btn-copy" onclick="copyLink(this)">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        Copy
+                    </button>
+                </div>
+            `;
 
             document.getElementById('share-area').classList.remove('hidden');
             document.getElementById('btn-generate-link').disabled = true;
@@ -543,8 +604,13 @@
             });
 
             STATE.conn.on('open', () => {
-                logger.log("Connected to Sender.");
+                logger.success("Connected to Sender.");
                 document.getElementById('sender-status').textContent = "Connected! Requesting file...";
+
+                // Monitor
+                monitorConnection(STATE.conn);
+                startHeartbeat(STATE.conn);
+
                 // Request start
                 STATE.conn.send({ type: 'request-start' });
             });
@@ -552,7 +618,12 @@
             STATE.conn.on('data', async (data) => {
                 // logger.log(`Received packet: ${data.type}`); // Verbose
                 try {
-                    if (data.type === 'metadata') {
+                    if (data.type === 'ping') {
+                        STATE.conn.send({ type: 'pong', timestamp: data.timestamp });
+                    } else if (data.type === 'pong') {
+                        const rtt = Date.now() - data.timestamp;
+                        logger.ping(rtt);
+                    } else if (data.type === 'metadata') {
                         await handleMetadata(data.payload);
                     } else if (data.type === 'chunk') {
                         await handleChunk(data);
@@ -572,6 +643,51 @@
                     logger.error("Connection interrupted before completion!");
                 }
             });
+        }
+
+        // --- Diagnostics & Monitoring ---
+        function monitorConnection(conn) {
+            const pc = conn.peerConnection;
+            if (!pc) return;
+
+            pc.oniceconnectionstatechange = () => {
+                const state = pc.iceConnectionState;
+                logger.net(`ICE State Change: ${state}`);
+                if (state === 'failed' || state === 'disconnected') {
+                    logger.error("Connection instability detected (ICE " + state + ")");
+                }
+            };
+
+            pc.onnegotiationneeded = () => {
+                logger.net("Renegotiation needed...");
+            };
+        }
+
+        function startHeartbeat(conn) {
+            // Send a ping every 2 seconds
+            setInterval(() => {
+                if (conn.open) {
+                    conn.send({ type: 'ping', timestamp: Date.now() });
+                }
+            }, 2000);
+        }
+
+        async function copyLink(btn) {
+            const input = document.getElementById('share-link-input');
+            input.select();
+            await navigator.clipboard.writeText(input.value);
+
+            const originalContent = btn.innerHTML;
+            btn.classList.add('copied');
+            btn.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Copied!
+            `;
+
+            setTimeout(() => {
+                btn.classList.remove('copied');
+                btn.innerHTML = originalContent;
+            }, 2000);
         }
 
         async function handleMetadata(encryptedParams) {
