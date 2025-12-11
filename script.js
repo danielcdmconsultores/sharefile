@@ -66,9 +66,34 @@ function init() {
 function createPeer() {
     // Generate a random ID with a prefix for clarity, or let PeerJS generate one.
     // Using default PeerJS cloud server.
-    return new Peer(null, {
-        debug: 2
+    // 1. Setup ICE/STUN servers for better NAT traversal
+    const peerConfig = {
+        debug: 2,
+        config: {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+            ]
+        }
+    };
+
+    /**
+     * TURN SERVER CONFIGURATION (Optional but recommended for strict NATs)
+     * If you have a TURN server (e.g., from Metered.ca, Twilio, or self-hosted),
+     * uncomment the block below and add your credentials.
+     */
+    /*
+    peerConfig.config.iceServers.push({
+        urls: 'turn:your-turn-server.com:3478',
+        username: 'your-username',
+        credential: 'your-password'
     });
+    */
+
+    return new Peer(null, peerConfig);
 }
 
 function updateStatus(status, text) {
