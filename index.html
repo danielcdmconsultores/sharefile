@@ -231,12 +231,110 @@
         .btn-copy.copied {
             background-color: var(--success);
         }
+
+        .share-link-box {
+            background-color: var(--surface);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-top: 1rem;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .settings-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 50%;
+            transition: all 0.2s;
+        }
+
+        .settings-btn:hover {
+            background-color: var(--surface);
+            color: var(--text);
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+
+        .modal {
+            background-color: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            padding: 2rem;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .modal textarea {
+            width: 100%;
+            height: 150px;
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: monospace;
+            font-size: 0.85rem;
+            resize: vertical;
+            margin-top: 0.5rem;
+        }
+
+        .modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .alert-info {
+            background-color: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
     </style>
+    <script>
+        // Pre-load logic to avoid flash? No, keep it simple.
+    </script>
 </head>
 
 <body>
 
     <div class="container">
+        <button class="settings-btn" onclick="openSettings()" title="Network Settings">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path
+                    d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z">
+                </path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+        </button>
         <h1>Peer2Peer Secure Transfer</h1>
 
         <div id="setup-panel" class="card">
@@ -290,6 +388,29 @@
         </div>
     </div>
 
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="modal-overlay hidden">
+        <div class="modal">
+            <h2>Network Settings</h2>
+            <div class="alert-info">
+                <strong>WAN/Internet Connection:</strong><br>
+                For connections outside your local network, a TURN server is often required to bypass NAT/Firewalls.
+                If you have a TURN server (e.g. from Twilio, Metered.ca), enter the config below.
+            </div>
+
+            <label for="ice-servers">ICE Verify Configuration (JSON):</label>
+            <textarea id="ice-servers-input" spellcheck="false"></textarea>
+
+            <div class="modal-footer">
+                <button class="btn" style="background-color: var(--surface); border: 1px solid var(--border);"
+                    onclick="closeSettings()">Cancel</button>
+                <button class="btn" onclick="saveSettings()">Save & Reload</button>
+            </div>
+            <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 1rem; text-align: center; cursor: pointer;"
+                onclick="resetDefaultIce()">Restore Defaults</p>
+        </div>
+    </div>
+
     <div class="footer" style="text-align: center; margin-top: 2rem; color: var(--text-muted); font-size: 0.8rem;">
         <p id="app-version">Loading version...</p>
     </div>
@@ -299,10 +420,20 @@
          */
         const CONFIG = {
             chunkSize: 64 * 1024, // 64KB chunks
+            // Base config, ICE servers will be injected dynamically
             peerConfig: {
                 debug: 1
             }
         };
+
+        const DEFAULT_ICE = [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' },
+            { urls: 'stun:stun2.l.google.com:19302' },
+            { urls: 'stun:stun3.l.google.com:19302' },
+            { urls: 'stun:stun4.l.google.com:19302' },
+            { urls: 'stun:global.stun.twilio.com:3478' }
+        ];
 
         const STATE = {
             peer: null,
@@ -435,11 +566,30 @@
         function initPeer(customId = null, targetId = null) {
             logger.log(`Initializing PeerJS (${STATE.mode})...`, 'info', 'PeerJS');
 
+            // Load Custom ICE config
+            const iceServers = getIceServers();
+            const peerOptions = {
+                ...CONFIG.peerConfig,
+                config: {
+                    iceServers: iceServers
+                }
+            };
+
+            logger.details(`Loaded ${iceServers.length} ICE Servers.`);
+            // Check for TURN
+            const hasTurn = iceServers.some(s => s.urls && (s.urls.startsWith('turn:') || (Array.isArray(s.urls) && s.urls.some(u => u.startsWith('turn:')))));
+            if (hasTurn) logger.success("TURN/Relay server configured.", 'Config');
+
             // Log Server Config (Implicit or Explicit)
-            const serverInfo = CONFIG.peerConfig.host ? `${CONFIG.peerConfig.host}:${CONFIG.peerConfig.port}` : "0.peerjs.com (Public Cloud)";
+            const serverInfo = peerOptions.host ? `${peerOptions.host}:${peerOptions.port}` : "0.peerjs.com (Public Cloud)";
             logger.details(`Signaling Server: ${serverInfo}`);
 
-            STATE.peer = new Peer(customId, CONFIG.peerConfig);
+            try {
+                STATE.peer = new Peer(customId, peerOptions);
+            } catch (e) {
+                logger.error("Failed to create Peer: " + e.message, 'Fatal');
+                return;
+            }
 
             STATE.peer.on('open', (id) => {
                 STATE.myId = id;
@@ -836,9 +986,50 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
         }
 
-        // Boot
+        // BOOT
         window.onload = init;
 
+        // --- Settings Logic ---
+        function getIceServers() {
+            const saved = localStorage.getItem('p2p_ice_servers');
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch (e) {
+                    console.error("Bad ICE config", e);
+                }
+            }
+            return DEFAULT_ICE;
+        }
+
+        function openSettings() {
+            const servers = getIceServers();
+            document.getElementById('ice-servers-input').value = JSON.stringify(servers, null, 2);
+            document.getElementById('settings-modal').classList.remove('hidden');
+        }
+
+        function closeSettings() {
+            document.getElementById('settings-modal').classList.add('hidden');
+        }
+
+        function saveSettings() {
+            const input = document.getElementById('ice-servers-input').value;
+            try {
+                const parsed = JSON.parse(input);
+                if (!Array.isArray(parsed)) throw new Error("Must be an array");
+                localStorage.setItem('p2p_ice_servers', JSON.stringify(parsed));
+                location.reload(); // Reload to apply
+            } catch (e) {
+                alert("Invalid JSON: " + e.message);
+            }
+        }
+
+        function resetDefaultIce() {
+            if (confirm("Reset to default STUN servers?")) {
+                localStorage.removeItem('p2p_ice_servers');
+                openSettings(); // Refresh view
+            }
+        }
     </script>
 </body>
 
