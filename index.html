@@ -290,6 +290,9 @@
         </div>
     </div>
 
+    <div class="footer" style="text-align: center; margin-top: 2rem; color: var(--text-muted); font-size: 0.8rem;">
+        <p id="app-version">Loading version...</p>
+    </div>
     <script>
         /**
          * APP LOGIC
@@ -316,20 +319,22 @@
 
         // --- Logger ---
         const logger = {
-            log: (msg, type = 'info') => {
+            log: (msg, type = 'info', context = 'System') => {
                 const div = document.getElementById('console-log');
                 const p = document.createElement('p');
                 const time = new Date().toLocaleTimeString();
                 p.className = type;
-                p.textContent = `[${time}] ${msg}`;
+                // Add Context pill
+                p.innerHTML = `<span style="opacity:0.7">[${time}]</span> <strong style="color: #fff">[${context}]</strong> ${msg}`;
                 div.appendChild(p);
                 div.scrollTop = div.scrollHeight;
-                console.log(`[${type}]`, msg);
+                console.log(`[${type}] [${context}]`, msg);
             },
-            ping: (ms) => logger.log(`⚡ RTT: ${ms}ms`, 'info'),
-            net: (msg) => logger.log(`🌐 ${msg}`, 'info'),
-            error: (msg) => logger.log(`❌ ${msg}`, 'error'),
-            success: (msg) => logger.log(`✅ ${msg}`, 'success')
+            ping: (ms) => logger.log(`⚡ Round Trip Time: ${ms}ms`, 'info', 'Network'),
+            net: (msg) => logger.log(`🌐 ${msg}`, 'info', 'Connection'),
+            error: (msg, context = 'Error') => logger.log(`❌ ${msg}`, 'error', context),
+            success: (msg, context = 'Success') => logger.log(`✅ ${msg}`, 'success', context),
+            details: (msg) => logger.log(`ℹ️ ${msg}`, 'info', 'Details')
         };
 
         // --- Crypto Utils ---
@@ -387,6 +392,14 @@
 
         // --- App Initialization ---
         async function init() {
+            // Versioning
+            const versionDate = new Date(document.lastModified);
+            const verString = `v${versionDate.getFullYear()}.${(versionDate.getMonth() + 1).toString().padStart(2, '0')}.${versionDate.getDate().toString().padStart(2, '0')} ${versionDate.getHours().toString().padStart(2, '0')}:${versionDate.getMinutes().toString().padStart(2, '0')}`;
+            document.getElementById('app-version').textContent = `Build: ${verString} (Source: index.html)`;
+
+            logger.log(`Initializing Application ${verString}...`, 'info', 'Boot');
+            logger.details(`Browser: ${navigator.userAgent}`);
+
             const hashParams = new URLSearchParams(window.location.hash.slice(1));
             const remotePeerId = hashParams.get('connect');
             const keyStr = hashParams.get('key');
@@ -396,10 +409,10 @@
                 setupView('receiver');
                 try {
                     STATE.key = await cryptoUtils.importKey(keyStr);
-                    logger.log("Decryption key successfully loaded.");
-                    initPeer(null, remotePeerId); // Receiver doesn't need specific ID, but connects TO remotePeerId
+                    logger.success("Decryption key successfully loaded.", 'Security');
+                    initPeer(null, remotePeerId);
                 } catch (e) {
-                    logger.error("Failed to load security key: " + e.message);
+                    logger.error("Failed to load security key: " + e.message, 'Security');
                 }
             } else {
                 STATE.mode = 'sender';
@@ -420,12 +433,17 @@
         }
 
         function initPeer(customId = null, targetId = null) {
-            logger.log(`Initializing PeerJS (${STATE.mode})...`);
+            logger.log(`Initializing PeerJS (${STATE.mode})...`, 'info', 'PeerJS');
+
+            // Log Server Config (Implicit or Explicit)
+            const serverInfo = CONFIG.peerConfig.host ? `${CONFIG.peerConfig.host}:${CONFIG.peerConfig.port}` : "0.peerjs.com (Public Cloud)";
+            logger.details(`Signaling Server: ${serverInfo}`);
+
             STATE.peer = new Peer(customId, CONFIG.peerConfig);
 
             STATE.peer.on('open', (id) => {
                 STATE.myId = id;
-                logger.log(`My Peer ID: ${id}`);
+                logger.success(`Peer ID Generated: ${id}`, 'Identity');
 
                 if (STATE.mode === 'receiver' && targetId) {
                     connectToPeer(targetId);
@@ -436,31 +454,29 @@
                 if (STATE.mode === 'sender') {
                     handleIncomingConnection(conn);
                 } else {
-                    // Receiver shouldn't really get incoming connections in this flow, but just in case
-                    logger.log("Unexpected incoming connection.");
+                    logger.error("Unexpected incoming connection in receiver mode.", 'Security');
                 }
             });
 
             STATE.peer.on('error', (err) => {
-                logger.error(`Peer Error: ${err.type} - ${err.message}`);
-                // Simple retry logic for critical errors could go here
+                logger.error(`Peer Error: ${err.type} - ${err.message}`, 'PeerJS');
                 if (err.type === 'peer-unavailable') {
-                    logger.error("Peer unavailable. Ensure Sender is still online and tab is open.");
+                    logger.error("Peer unavailable. Ensure Sender is still online and tab is open.", 'Connection');
                 }
             });
 
             STATE.peer.on('disconnected', () => {
-                logger.log("Disconnected from signalling server. Reconnecting...");
+                logger.error("Disconnected from signalling server. Reconnecting...", 'Network');
                 STATE.peer.reconnect();
             });
         }
 
         // --- Sender Logic ---
         function handleIncomingConnection(conn) {
-            logger.log(`Incoming connection from ${conn.peer}`);
+            logger.log(`Incoming connection handshake from ${conn.peer}`, 'info', 'Handshake');
 
             conn.on('open', () => {
-                logger.success("Connection established!");
+                logger.success("P2P Tunnel Established", 'Connection');
                 STATE.conn = conn;
 
                 // Monitor connection health
@@ -469,23 +485,26 @@
 
             conn.on('data', async (data) => {
                 if (data.type === 'ping') {
+                    // Responding to heartbeat
                     conn.send({ type: 'pong', timestamp: data.timestamp });
                 } else if (data.type === 'pong') {
                     const rtt = Date.now() - data.timestamp;
                     logger.ping(rtt);
                 } else {
-                    logger.log(`Received signal: ${data.type}`);
                     if (data.type === 'request-start') {
+                        logger.log("Receiver requested file start.", 'info', 'Signal');
                         if (STATE.file) {
                             sendFile(conn);
                         } else {
                             conn.send({ type: 'error', message: 'No file selected on sender.' });
                         }
+                    } else {
+                        logger.log(`Received signal: ${data.type}`, 'info', 'Data');
                     }
                 }
             });
 
-            conn.on('close', () => logger.log("Connection closed."));
+            conn.on('close', () => logger.log("Connection closed.", 'info', 'Connection'));
         }
 
         async function prepareSender() {
@@ -521,13 +540,13 @@
             document.getElementById('btn-generate-link').disabled = true;
             document.getElementById('btn-generate-link').textContent = "Link Generated - Waiting for Connection...";
 
-            logger.log("File prepared & encrypted link generated.");
+            logger.log(`Generated file link. Waiting for peer...`, 'info', 'Setup');
         }
 
         async function sendFile(conn) {
             if (!STATE.file) return;
 
-            logger.log("Starting transfer...");
+            logger.log("Starting file encryption & transfer...", 'info', 'Process');
             const file = STATE.file;
             const totalChunks = Math.ceil(file.size / CONFIG.chunkSize);
 
@@ -559,7 +578,7 @@
                 }
 
                 if (offset >= file.size) {
-                    logger.success("File sent completely.");
+                    logger.success("File sent completely.", 'Transfer');
                     conn.send({ type: 'end' });
                     return;
                 }
@@ -604,7 +623,7 @@
             });
 
             STATE.conn.on('open', () => {
-                logger.success("Connected to Sender.");
+                logger.success("Connected to Sender.", 'Connection');
                 document.getElementById('sender-status').textContent = "Connected! Requesting file...";
 
                 // Monitor
@@ -612,6 +631,7 @@
                 startHeartbeat(STATE.conn);
 
                 // Request start
+                logger.log("Requesting file start...", 'info', 'Signal');
                 STATE.conn.send({ type: 'request-start' });
             });
 
@@ -630,7 +650,7 @@
                     } else if (data.type === 'end') {
                         finalizeDownload();
                     } else if (data.type === 'error') {
-                        logger.error("Sender reported error: " + data.message);
+                        logger.error("Sender reported error: " + data.message, 'Remote Error');
                     }
                 } catch (err) {
                     logger.error(`Error processing data: ${err.message}`);
@@ -638,9 +658,9 @@
             });
 
             STATE.conn.on('close', () => {
-                logger.log("Connection closed.");
+                logger.log("Connection closed.", 'info', 'Connection');
                 if (STATE.receivedBuffer.length > 0 && STATE.bytesReceived < (STATE.fileMeta?.size || 999)) {
-                    logger.error("Connection interrupted before completion!");
+                    logger.error("Connection interrupted before completion!", 'Error');
                 }
             });
         }
@@ -650,17 +670,66 @@
             const pc = conn.peerConnection;
             if (!pc) return;
 
+            // ICE State Monitoring
             pc.oniceconnectionstatechange = () => {
                 const state = pc.iceConnectionState;
                 logger.net(`ICE State Change: ${state}`);
+                if (state === 'connected' || state === 'completed') {
+                    // Log candidates when connected
+                    getConnStats(pc);
+                }
                 if (state === 'failed' || state === 'disconnected') {
-                    logger.error("Connection instability detected (ICE " + state + ")");
+                    logger.error("Connection instability detected (ICE " + state + ")", 'Network');
                 }
             };
 
             pc.onnegotiationneeded = () => {
-                logger.net("Renegotiation needed...");
+                logger.net("Renegotiation needed (Topology change)...");
             };
+        }
+
+        async function getConnStats(pc) {
+            try {
+                const stats = await pc.getStats();
+                let selectedPair = null;
+
+                stats.forEach(report => {
+                    if (report.type === 'transport' && report.selectedCandidatePairId) {
+                        selectedPair = stats.get(report.selectedCandidatePairId);
+                    }
+                });
+
+                // Fallback for some browsers if transport logic differs
+                if (!selectedPair) {
+                    stats.forEach(report => {
+                        if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                            selectedPair = report;
+                        }
+                    });
+                }
+
+                if (selectedPair) {
+                    const local = stats.get(selectedPair.localCandidateId);
+                    const remote = stats.get(selectedPair.remoteCandidateId);
+
+                    if (local && remote) {
+                        logger.details(`Connection Path: ${local.protocol.toUpperCase()}`);
+                        logger.details(`Local: ${local.ip || local.address}:${local.port} (${local.candidateType})`);
+                        logger.details(`Remote: ${remote.ip || remote.address}:${remote.port} (${remote.candidateType})`);
+
+                        // Guess NAT/Connection type
+                        if (local.candidateType === 'host' && remote.candidateType === 'host') {
+                            logger.net("Direct LAN/Network connection (Low Latency)");
+                        } else if (local.candidateType === 'srflx' || remote.candidateType === 'srflx') {
+                            logger.net("NAT Traversal via STUN (Standard P2P)");
+                        } else if (local.candidateType === 'relay' || remote.candidateType === 'relay') {
+                            logger.net("Relayed via TURN (High Latency/Fallback)");
+                        }
+                    }
+                }
+            } catch (e) {
+                logger.error("Could not stats: " + e.message, 'Diagnostics');
+            }
         }
 
         function startHeartbeat(conn) {
@@ -695,7 +764,7 @@
             const jsonStr = new TextDecoder().decode(decryptedBytes);
             STATE.fileMeta = JSON.parse(jsonStr);
 
-            logger.log(`Metadata received: ${STATE.fileMeta.name} (${formatBytes(STATE.fileMeta.size)})`);
+            logger.log(`Metadata received: ${STATE.fileMeta.name} (${formatBytes(STATE.fileMeta.size)})`, 'info', 'Metadata');
 
             document.getElementById('download-area').classList.remove('hidden');
             document.getElementById('recv-filename').textContent = STATE.fileMeta.name;
@@ -723,7 +792,7 @@
         }
 
         function finalizeDownload() {
-            logger.success("Download complete! Reconstructing file...");
+            logger.success("Download complete! Reconstructing file...", 'Success');
             const blob = new Blob(STATE.receivedBuffer, { type: STATE.fileMeta.type });
 
             const url = URL.createObjectURL(blob);
