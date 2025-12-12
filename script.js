@@ -33,6 +33,7 @@ let fileName = '';
 let speedInterval = null;
 let lastBytes = 0;
 let currentTransferBytes = 0;
+let pendingFile = null;
 
 // Configuration
 const CHUNK_SIZE = 16384; // 16KB chunks
@@ -134,27 +135,40 @@ function handleFileSelection(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (!conn || !conn.open) {
-        alert('Peer not connected yet!');
-        return;
-    }
-
-    // Switch to transfer view
+    // Switch to transfer view immediately to show selection
     showView('transfer');
     dom.fileName.textContent = file.name;
     dom.fileSize.textContent = formatBytes(file.size);
     dom.transferActions.classList.add('hidden');
 
-    // 1. Send Metadata
+    if (conn && conn.open) {
+        // Connected: Send immediately
+        dom.statusText.textContent = "Sending...";
+        sendMetadata(file);
+        sendFile(file);
+    } else {
+        // Not connected: Queue
+        pendingFile = file;
+        console.log('File queued. Waiting for connection...');
+        // We might want to show a message in the transfer view specifically
+        // But for now, the transfer view shows the file. We can update status text.
+        updateStatus('disconnected', 'Waiting for peer to connect...');
+
+        // Add a visual hint in the transfer view if needed, but the globally visible status badge helps.
+        // Let's add a specific message in the transfer area if we can, or just rely on the main status.
+        // The implementation plan suggested: "Add a persistent status message area in #view-transfer"
+        // For now, let's inject a small message into `progress-stats` or similar if needed, 
+        // but the status badge is quite visible.
+    }
+}
+
+function sendMetadata(file) {
     conn.send({
         type: 'metadata',
         name: file.name,
         size: file.size,
         fileType: file.type
     });
-
-    // 2. Start sending chunks
-    sendFile(file);
 }
 
 function sendFile(file) {
@@ -275,11 +289,17 @@ function setupConnectionEvents(role) {
         console.log(`${role} connected to peer`);
 
         if (role === 'Sender') {
-            // Enable drop zone
-            dom.dropZone.classList.remove('disabled');
-            dom.fileInput.disabled = false;
-            dom.dropZone.querySelector('p').textContent = 'Peer connected. Click to choose file.';
-            dom.dropZone.querySelector('h3').textContent = 'Ready to Send';
+            // Check for pending file
+            if (pendingFile) {
+                console.log('Found pending file, sending now...');
+                updateStatus('connected', 'Sending queued file...');
+                sendMetadata(pendingFile);
+                sendFile(pendingFile);
+                pendingFile = null;
+            } else {
+                dom.dropZone.querySelector('p').textContent = 'Peer connected. Click to choose file.';
+                dom.dropZone.querySelector('h3').textContent = 'Ready to Send';
+            }
         }
     });
 
