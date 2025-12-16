@@ -16,7 +16,7 @@
 ## ⚙️  ¿Cómo funciona (sin entrar en tecnicismos)?  
 
 1. **Identificador único**  
-   Cada vez que abres la página, el navegador crea un **ID** que lo identifica en la red. Piensa en él como un número de teléfono virtual.  
+   Cada vez que abres la página, y le das a copiar la urlel navegador crea un **ID** que lo identifica en la red. Piensa en él como un número de teléfono virtual.  (está en la propia url)
 
 2. **Señalización ligera**  
    Para que dos navegadores se “encuentren”, primero intercambian sus IDs a través de un **pequeño servidor de señalización**. Este servidor solo pasa los IDs, **no almacena ni ve** los archivos.  
@@ -40,13 +40,11 @@ Imaginemos a **Ana** (quien envía) y **Luis** (quien recibe).
 
 | Paso | Qué hace Ana (origen) | Qué hace Luis (destino) |
 |------|----------------------|------------------------|
-| **1** | Abre la página en su navegador → la app le muestra su **ID = `X7Y9`**. | Hace lo mismo y obtiene su **ID = `M4Q2`**. |
-| **2** | Copia el ID de Luis (`M4Q2`) y se lo envía por WhatsApp, correo, QR, etc. | Copia el ID de Ana (`X7Y9`) y se lo envía a su vez. |
-| **3** | Introduce el ID de Luis en el campo “ID del receptor”. | Espera a que el otro navegador se conecte (no necesita hacer nada más). |
-| **4** | Selecciona el archivo que quiere compartir y pulsa **“Enviar”**. | La aplicación le muestra que está recibiendo datos y el progreso de la transferencia. |
-| **5** | La librería PeerJS abre la conexión directa y empieza a mandar los trozos del archivo. | Cada trozo llega y la aplicación los va guardando en memoria. |
-| **6** | Cuando termina, la app informa a Luis que la transferencia ha finalizado. | Luis recibe un botón **“Descargar”**; al pulsarlo el archivo se guarda en su dispositivo. |
-| **7** | Ambas pestañas pueden cerrarse; los archivos no quedan guardados en ningún servidor. | — |
+| **1** | Abre la página en su navegador → la app le muestra una url con un **ID incrustado**. | al seleccionar un fichero. |
+| **2** | pega la url en un navegador destino de  Luis (que trae el ID de Ana y se lo envía a su vez el de Luis). |
+| **3** | La librería PeerJS abre la conexión directa y empieza a mandar los trozos del archivo. | Cada trozo llega y la aplicación los va guardando en me
+| **5** | Cuando termina, la app informa a Luis que la transferencia ha finalizado. | Luis recibe un botón **“Descargar”**; al pulsarlo el archivo se guarda en su dispositivo. |
+| **6** | Ambas pestañas pueden cerrarse; los archivos no quedan guardados en ningún servidor. | — |
 
 > **En resumen:** Ana y Luis solo intercambian sus IDs, la librería PeerJS hace el resto, y el archivo viaja directamente de un navegador a otro, totalmente cifrado.  
 
