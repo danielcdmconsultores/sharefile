@@ -18,6 +18,9 @@
 
     <!-- Icons (Phosphor Icons for a clean look) -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+    <!-- Marked for Markdown Rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 
 <body>
@@ -33,6 +36,10 @@
                 <i class="ph-fill ph-paper-plane-tilt"></i>
                 <span>ShareFile<span class="highlight">Peer2Peer</span></span>
             </div>
+
+            <button id="info-btn" class="icon-btn-header" aria-label="Information">
+                <i class="ph-bold ph-question"></i>
+            </button>
             <div id="connection-status" class="status-badge disconnected">
                 <div class="status-dot"></div>
                 <span id="status-text">Initializing...</span>
@@ -112,6 +119,24 @@
                 <button id="reset-btn" class="btn-secondary">Send Another</button>
             </div>
         </section>
+
+        <!-- Info Modal -->
+        <div id="info-modal" class="modal-overlay hidden">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <h2>About ShareFile</h2>
+                    <button id="close-modal-btn" class="icon-btn-header">
+                        <i class="ph-bold ph-x"></i>
+                    </button>
+                </div>
+                <div id="readme-content" class="markdown-body">
+                    <!-- Content will be loaded here -->
+                    <div class="loader-container">
+                        <div class="spinner"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div id="version-display"
             style="margin-top: 1rem; text-align: center; font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">

@@ -19,7 +19,13 @@ const dom = {
     transferSpeed: document.getElementById('transfer-speed'),
     downloadBtn: document.getElementById('download-btn'),
     resetBtn: document.getElementById('reset-btn'),
-    transferActions: document.getElementById('transfer-actions')
+    transferActions: document.getElementById('transfer-actions'),
+
+    // Header & Modal
+    infoBtn: document.getElementById('info-btn'),
+    infoModal: document.getElementById('info-modal'),
+    closeModalBtn: document.getElementById('close-modal-btn'),
+    readmeContent: document.getElementById('readme-content')
 };
 
 // Application State
@@ -58,6 +64,40 @@ function init() {
     // dom.dropZone click handled natively by the overlay input
     dom.fileInput.addEventListener('change', handleFileSelection);
     dom.resetBtn.addEventListener('click', () => window.location.href = window.location.origin + window.location.pathname);
+
+    // Modal Events
+    dom.infoBtn.addEventListener('click', openInfoModal);
+    dom.closeModalBtn.addEventListener('click', closeInfoModal);
+    dom.infoModal.addEventListener('click', (e) => {
+        if (e.target === dom.infoModal) closeInfoModal();
+    });
+}
+
+function openInfoModal() {
+    dom.infoModal.classList.remove('hidden');
+    // Fetch README if empty (or always to keep fresh, let's allow refresh if closed)
+    // Checking if already loaded to avoid refetching every time if desired,
+    // but user requested "dynamic", so fetching is safer to ensure latest content if it changes safely.
+    loadReadme();
+}
+
+function closeInfoModal() {
+    dom.infoModal.classList.add('hidden');
+}
+
+function loadReadme() {
+    fetch('README.md')
+        .then(response => {
+            if (!response.ok) throw new Error('Failed to load README.md');
+            return response.text();
+        })
+        .then(text => {
+            // Use marked to parse
+            dom.readmeContent.innerHTML = marked.parse(text);
+        })
+        .catch(err => {
+            dom.readmeContent.innerHTML = `<p style="color: var(--error)">Error loading info: ${err.message}</p>`;
+        });
 }
 
 // ------------------------------------------------
