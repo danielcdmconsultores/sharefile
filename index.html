@@ -149,7 +149,7 @@
                 const year = date.getFullYear();
                 const hours = String(date.getHours()).padStart(2, '0');
                 const minutes = String(date.getMinutes()).padStart(2, '0');
-                const version = `v ${year}.${month}.${day} .${hours}${minutes} daniel peña`;
+                const version = `v ${year}${month}${day}.${hours}${minutes} daniel peña`;
                 document.getElementById('version-display').textContent = version;
             })();
         </script>
