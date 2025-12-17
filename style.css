@@ -500,7 +500,8 @@ body {
     cursor: pointer;
     transition: all 0.2s;
     font-size: 1.2rem;
-    margin-right: auto; /* Push connection status to right if needed, or adjust flex */
+    margin-right: auto;
+    /* Push connection status to right if needed, or adjust flex */
     margin-left: 1rem;
 }
 
@@ -526,13 +527,23 @@ body {
     animation: fadeIn 0.3s ease;
 }
 
+@media (max-width: 480px) {
+    .modal-overlay {
+        padding: 0.5rem;
+        /* Less padding on mobile to maximize content area */
+    }
+}
+
 .modal-content {
-    background: #1e293b; /* Darker solid bg for readability */
+    background: #1e293b;
+    /* Darker solid bg for readability */
     border: 1px solid var(--glass-border);
     border-radius: 20px;
     width: 100%;
-    max-width: 600px;
-    max-height: 85vh;
+    /* Fill available space respecting parent padding */
+    max-width: 1200px;
+    /* Large max-width for less vertical scroll on desktops */
+    max-height: 92vh;
     display: flex;
     flex-direction: column;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
@@ -595,7 +606,7 @@ body {
 }
 
 .markdown-body code {
-    background: rgba(0,0,0,0.3);
+    background: rgba(0, 0, 0, 0.3);
     padding: 0.2rem 0.4rem;
     border-radius: 4px;
     font-family: monospace;
@@ -603,7 +614,7 @@ body {
 }
 
 .markdown-body pre {
-    background: rgba(0,0,0,0.3);
+    background: rgba(0, 0, 0, 0.3);
     padding: 1rem;
     border-radius: 8px;
     overflow-x: auto;
