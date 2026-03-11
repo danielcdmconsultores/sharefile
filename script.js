@@ -105,11 +105,9 @@ function loadReadme() {
 // ------------------------------------------------
 
 function createPeer() {
-    // Generate a random ID with a prefix for clarity, or let PeerJS generate one.
-    // Using default PeerJS cloud server.
-    // 1. Setup ICE/STUN servers for better NAT traversal
+    // 1. Enhanced ICE Servers (STUN/TURN) for better NAT traversal
     const peerConfig = {
-        debug: 2,
+        debug: 1, // Reduced debug for production-like feel
         config: {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -117,24 +115,43 @@ function createPeer() {
                 { urls: 'stun:stun2.l.google.com:19302' },
                 { urls: 'stun:stun3.l.google.com:19302' },
                 { urls: 'stun:stun4.l.google.com:19302' },
-            ]
-        }
+                { urls: 'stun:global.stun.twilio.com:3478?transport=udp' },
+                // Public TURN server (using a semi-reliable one as fallback)
+                {
+                    urls: 'turn:openrelay.metered.ca:80',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                },
+                {
+                    urls: 'turn:openrelay.metered.ca:443',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                },
+                {
+                    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                }
+            ],
+            iceCandidatePoolSize: 10
+        },
+        // Resilience settings
+        pingInterval: 5000
     };
 
-    /**
-     * TURN SERVER CONFIGURATION (Optional but recommended for strict NATs)
-     * If you have a TURN server (e.g., from Metered.ca, Twilio, or self-hosted),
-     * uncomment the block below and add your credentials.
-     */
-    /*
-    peerConfig.config.iceServers.push({
-        urls: 'turn:your-turn-server.com:3478',
-        username: 'your-username',
-        credential: 'your-password'
-    });
-    */
-
     return new Peer(null, peerConfig);
+}
+
+function handlePeerReconnection() {
+    if (peer && !peer.destroyed) {
+        if (peer.disconnected) {
+            console.log('Peer disconnected, attempting to reconnect...');
+            peer.reconnect();
+        }
+    } else {
+        console.log('Peer destroyed or null, re-initializing...');
+        init();
+    }
 }
 
 function updateStatus(status, text) {
@@ -165,9 +182,24 @@ function initSender() {
     });
 
     peer.on('error', (err) => {
-        console.error(err);
-        updateStatus('disconnected', 'Network Error');
-        alert('An error occurred: ' + err.type);
+        console.error('Peer Error:', err.type, err);
+        
+        if (err.type === 'unavailable-id') {
+            // ID taken, should not happen with null ID but good to handle
+            setTimeout(() => initSender(), 1000);
+        } else if (err.type === 'disconnected' || err.type === 'network' || err.type === 'server-error') {
+            updateStatus('disconnected', 'Network Error. Reconnecting...');
+            setTimeout(handlePeerReconnection, 3000);
+        } else {
+            updateStatus('disconnected', 'Network Error');
+            // Don't alert for every small issue, just show in status
+            console.warn('Unhandled Peer error:', err.type);
+        }
+    });
+
+    peer.on('disconnected', () => {
+        updateStatus('disconnected', 'Disconnected. Retrying...');
+        setTimeout(handlePeerReconnection, 3000);
     });
 }
 
@@ -272,9 +304,21 @@ function initReceiver(targetId) {
     });
 
     peer.on('error', (err) => {
-        console.error(err);
-        updateStatus('disconnected', 'Connection Failed');
-        alert('Could not connect to peer. Ensure the link is correct and the sender is still online.');
+        console.error('Receiver Peer Error:', err.type, err);
+        updateStatus('disconnected', 'Connection Error. Retrying...');
+        
+        if (err.type === 'peer-unavailable') {
+            // Sender might be offline or ID changed
+            console.log('Target peer unavailable, will retry in 5s...');
+            setTimeout(() => initReceiver(targetId), 5000);
+        } else {
+            setTimeout(handlePeerReconnection, 3000);
+        }
+    });
+
+    peer.on('disconnected', () => {
+        updateStatus('disconnected', 'Disconnected. Retrying...');
+        setTimeout(handlePeerReconnection, 3000);
     });
 }
 
@@ -351,12 +395,20 @@ function setupConnectionEvents(role) {
 
     conn.on('close', () => {
         updateStatus('disconnected', 'Peer Disconnected');
-        alert('Peer disconnected.');
-        // Optionally reset UI
+        console.log('Connection closed. Waiting for peer to reconnect...');
+        // If we are the receiver, we might want to try reconnecting to the sender
+        if (role === 'Receiver') {
+            setTimeout(() => {
+                const urlParams = new URLSearchParams(window.location.search);
+                const targetId = urlParams.get('to');
+                if (targetId) initReceiver(targetId);
+            }, 3000);
+        }
     });
 
     conn.on('error', (err) => {
         console.error('Connection error:', err);
+        updateStatus('disconnected', 'Connection Error');
     });
 }
 
