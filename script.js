@@ -179,6 +179,17 @@ function initSender() {
         // When a receiver connects to us
         conn = c;
         setupConnectionEvents('Sender');
+        
+        // Immediately notify receiver of our state
+        setTimeout(() => {
+            if (conn && conn.open) {
+                if (pendingFile) {
+                    sendMetadata(pendingFile);
+                } else {
+                    conn.send({ type: 'waiting-for-file' });
+                }
+            }
+        }, 500);
     });
 
     peer.on('error', (err) => {
@@ -222,15 +233,13 @@ function handleFileSelection(e) {
         // Not connected: Queue
         pendingFile = file;
         console.log('File queued. Waiting for connection...');
-        // We might want to show a message in the transfer view specifically
-        // But for now, the transfer view shows the file. We can update status text.
-        updateStatus('disconnected', 'Waiting for peer to connect...');
-
-        // Add a visual hint in the transfer view if needed, but the globally visible status badge helps.
-        // Let's add a specific message in the transfer area if we can, or just rely on the main status.
-        // The implementation plan suggested: "Add a persistent status message area in #view-transfer"
-        // For now, let's inject a small message into `progress-stats` or similar if needed, 
-        // but the status badge is quite visible.
+        updateStatus('disconnected', 'File ready. Waiting for peer...');
+        
+        // Provide visual feedback in the home view that the file is ready
+        const dropText = dom.dropZone.querySelector('p');
+        const dropTitle = dom.dropZone.querySelector('h3');
+        if (dropText) dropText.textContent = 'File will be sent once peer connects.';
+        if (dropTitle) dropTitle.textContent = 'File: ' + file.name;
     }
 }
 
@@ -334,6 +343,7 @@ function handleData(data) {
         dom.fileName.textContent = data.name;
         dom.fileSize.textContent = formatBytes(data.size);
         dom.transferActions.classList.add('hidden');
+        dom.statusText.textContent = "Receiving...";
 
         startSpeedTracker();
     } else if (data.type === 'chunk') {
@@ -348,6 +358,7 @@ function handleData(data) {
         const blob = new Blob(fileBuffer);
         const url = URL.createObjectURL(blob);
 
+        updateStatus('connected', 'Received Successfully');
         dom.transferPercent.textContent = 'Completed';
         dom.transferActions.classList.remove('hidden');
         dom.downloadBtn.style.display = 'flex';
@@ -360,6 +371,10 @@ function handleData(data) {
             a.click();
             document.body.removeChild(a);
         };
+    } else if (data.type === 'waiting-for-file') {
+        const loaderText = document.querySelector('#receiver-loader p');
+        if (loaderText) loaderText.textContent = 'Connected. Waiting for sender to select a file...';
+        updateStatus('connected', 'Waiting for file...');
     }
 }
 
