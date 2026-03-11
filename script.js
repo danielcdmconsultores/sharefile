@@ -110,7 +110,7 @@ function loadReadme() {
 function createPeer() {
     // 1. Enhanced ICE Servers (STUN/TURN) for better NAT traversal
     const peerConfig = {
-        debug: 1, // Reduced debug for production-like feel
+        debug: 2, // Info level debug to see ICE connection states in console
         config: {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
@@ -118,23 +118,9 @@ function createPeer() {
                 { urls: 'stun:stun2.l.google.com:19302' },
                 { urls: 'stun:stun3.l.google.com:19302' },
                 { urls: 'stun:stun4.l.google.com:19302' },
-                { urls: 'stun:global.stun.twilio.com:3478?transport=udp' },
-                // Public TURN server (using a semi-reliable one as fallback)
-                {
-                    urls: 'turn:openrelay.metered.ca:80',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                },
-                {
-                    urls: 'turn:openrelay.metered.ca:443',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                },
-                {
-                    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                }
+                { urls: 'stun:global.stun.twilio.com:3478' },
+                { urls: 'stun:stun.services.mozilla.com' },
+                { urls: 'stun:stun.cloudflare.com:3478' }
             ],
             iceCandidatePoolSize: 10
         },
