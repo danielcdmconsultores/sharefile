@@ -335,31 +335,36 @@ function initReceiver(targetId) {
     });
 }
 
+// Called on the sender when the receiver is ready (either via 'open' event or 'ready' message).
+// Uses isTransferring to ensure we only send once.
+function senderHandleReceiverReady(c) {
+    if (pendingFile && !isTransferring) {
+        console.log('[Sender] Receiver ready - sending pending file:', pendingFile.name);
+        showView('transfer');
+        dom.fileName.textContent = pendingFile.name;
+        dom.fileSize.textContent = formatBytes(pendingFile.size);
+        dom.transferActions.classList.add('hidden');
+        updateStatus('connected', 'Sending queued file...');
+        isTransferring = true;
+        const fileToSend = pendingFile;
+        pendingFile = null;
+        sendMetadata(fileToSend);
+        sendFile(fileToSend);
+    } else if (!isTransferring) {
+        console.log('[Sender] Receiver ready - no pending file, sending waiting-for-file');
+        c.send({ type: 'waiting-for-file' });
+        const dropText = dom.dropZone.querySelector('p');
+        const dropTitle = dom.dropZone.querySelector('h3');
+        if (dropText) dropText.textContent = 'Peer connected. Ready to send.';
+        if (dropTitle) dropTitle.textContent = 'Transfer Ready';
+    }
+}
+
 function handleData(data) {
     if (data.type === 'ready') {
-        // Receiver says its data channel is working.
-        // Sender should send pending file or notify waiting.
-        console.log('Received ready signal from receiver');
-        if (pendingFile && !isTransferring) {
-            console.log('Sending pending file:', pendingFile.name);
-            showView('transfer');
-            dom.fileName.textContent = pendingFile.name;
-            dom.fileSize.textContent = formatBytes(pendingFile.size);
-            dom.transferActions.classList.add('hidden');
-            updateStatus('connected', 'Sending queued file...');
-            isTransferring = true;
-            const fileToSend = pendingFile;
-            pendingFile = null;
-            sendMetadata(fileToSend);
-            sendFile(fileToSend);
-        } else if (!isTransferring) {
-            console.log('No pending file, notifying receiver to wait');
-            conn.send({ type: 'waiting-for-file' });
-            const dropText = dom.dropZone.querySelector('p');
-            const dropTitle = dom.dropZone.querySelector('h3');
-            if (dropText) dropText.textContent = 'Peer connected. Ready to send.';
-            if (dropTitle) dropTitle.textContent = 'Transfer Ready';
-        }
+        // Receiver confirms its data channel is open.
+        console.log('[Sender] Received ready signal from receiver');
+        senderHandleReceiverReady(conn);
     } else if (data.type === 'metadata') {
         // Prepare to receive
         fileBuffer = [];
@@ -417,10 +422,14 @@ function setupConnectionEvents(role, c) {
         console.log(`${role} data channel open. c.open=${c.open}`);
 
         if (role === 'Receiver') {
-            // Send a 'ready' message to prove the data channel works.
-            // The sender will react to this by sending the file or a waiting msg.
+            // Send a 'ready' message to tell the sender it can push data.
             console.log('Receiver sending ready signal');
             c.send({ type: 'ready' });
+        } else if (role === 'Sender') {
+            // Path 1: sender's own 'open' event fired first.
+            // Try to send pending file immediately (path 2 is the 'ready' message from receiver).
+            console.log('[Sender] handleOpen - checking for pending file');
+            senderHandleReceiverReady(c);
         }
     };
 
