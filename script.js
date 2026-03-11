@@ -336,7 +336,31 @@ function initReceiver(targetId) {
 }
 
 function handleData(data) {
-    if (data.type === 'metadata') {
+    if (data.type === 'ready') {
+        // Receiver says its data channel is working.
+        // Sender should send pending file or notify waiting.
+        console.log('Received ready signal from receiver');
+        if (pendingFile && !isTransferring) {
+            console.log('Sending pending file:', pendingFile.name);
+            showView('transfer');
+            dom.fileName.textContent = pendingFile.name;
+            dom.fileSize.textContent = formatBytes(pendingFile.size);
+            dom.transferActions.classList.add('hidden');
+            updateStatus('connected', 'Sending queued file...');
+            isTransferring = true;
+            const fileToSend = pendingFile;
+            pendingFile = null;
+            sendMetadata(fileToSend);
+            sendFile(fileToSend);
+        } else if (!isTransferring) {
+            console.log('No pending file, notifying receiver to wait');
+            conn.send({ type: 'waiting-for-file' });
+            const dropText = dom.dropZone.querySelector('p');
+            const dropTitle = dom.dropZone.querySelector('h3');
+            if (dropText) dropText.textContent = 'Peer connected. Ready to send.';
+            if (dropTitle) dropTitle.textContent = 'Transfer Ready';
+        }
+    } else if (data.type === 'metadata') {
         // Prepare to receive
         fileBuffer = [];
         receivedSize = 0;
@@ -390,29 +414,13 @@ function handleData(data) {
 function setupConnectionEvents(role, c) {
     const handleOpen = () => {
         updateStatus('connected', 'Connected');
-        console.log(`${role} connected to peer`);
+        console.log(`${role} data channel open. c.open=${c.open}`);
 
-        if (role === 'Sender') {
-            // Check for pending file or notify waiting
-            if (pendingFile && !isTransferring) {
-                console.log('Sending pending file:', pendingFile.name);
-                showView('transfer');
-                dom.fileName.textContent = pendingFile.name;
-                dom.fileSize.textContent = formatBytes(pendingFile.size);
-                dom.transferActions.classList.add('hidden');
-                updateStatus('connected', 'Sending queued file...');
-                isTransferring = true;
-                sendMetadata(pendingFile);
-                sendFile(pendingFile);
-                pendingFile = null;
-            } else if (!isTransferring) {
-                console.log('No pending file, sending waiting-for-file notification');
-                c.send({ type: 'waiting-for-file' });
-                const dropText = dom.dropZone.querySelector('p');
-                const dropTitle = dom.dropZone.querySelector('h3');
-                if (dropText) dropText.textContent = 'Peer connected. Ready to send.';
-                if (dropTitle) dropTitle.textContent = 'Transfer Ready';
-            }
+        if (role === 'Receiver') {
+            // Send a 'ready' message to prove the data channel works.
+            // The sender will react to this by sending the file or a waiting msg.
+            console.log('Receiver sending ready signal');
+            c.send({ type: 'ready' });
         }
     };
 
@@ -431,7 +439,6 @@ function setupConnectionEvents(role, c) {
         isTransferring = false;
         updateStatus('disconnected', 'Peer Disconnected');
         console.log('Connection closed. Waiting for peer to reconnect...');
-        // If we are the receiver, we might want to try reconnecting to the sender
         if (role === 'Receiver') {
             setTimeout(() => {
                 const urlParams = new URLSearchParams(window.location.search);
@@ -441,7 +448,7 @@ function setupConnectionEvents(role, c) {
         }
     });
 
-    conn.on('error', (err) => {
+    c.on('error', (err) => {
         console.error('Connection error:', err);
         updateStatus('disconnected', 'Connection Error');
     });
