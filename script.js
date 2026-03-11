@@ -41,6 +41,7 @@ let speedInterval = null;
 let lastBytes = 0;
 let currentTransferBytes = 0;
 let pendingFile = null;
+let isTransferring = false;
 
 // Configuration
 const CHUNK_SIZE = 16384; // 16KB chunks
@@ -179,9 +180,14 @@ function initSender() {
 
     peer.on('connection', (c) => {
         // When a receiver connects to us
+        console.log('Receiver connection incoming...');
+        if (isTransferring) {
+            console.warn('Received connection while already transferring. Closing new connection.');
+            c.on('open', () => c.close());
+            return;
+        }
         conn = c;
-        setupConnectionEvents('Sender');
-        // Logic moved to 'open' event in setupConnectionEvents for better reliability
+        setupConnectionEvents('Sender', c);
     });
 
     peer.on('error', (err) => {
@@ -209,13 +215,14 @@ function handleFileSelection(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (conn && conn.open) {
+    if (conn && conn.open && !isTransferring) {
         // Connected: Switch view and send immediately
         showView('transfer');
         dom.fileName.textContent = file.name;
         dom.fileSize.textContent = formatBytes(file.size);
         dom.transferActions.classList.add('hidden');
         dom.statusText.textContent = "Sending...";
+        isTransferring = true;
         sendMetadata(file);
         sendFile(file);
     } else {
@@ -272,10 +279,11 @@ function sendFile(file) {
         } else {
             // Done
             console.log('File sent successfully');
+            isTransferring = false;
             stopSpeedTracker();
             conn.send({ type: 'end' });
             dom.transferPercent.textContent = 'Completed';
-            dom.resetBtn.parentElement.classList.remove('hidden');
+            dom.transferActions.classList.remove('hidden');
             dom.downloadBtn.style.display = 'none'; // Sender doesn't download
         }
     };
@@ -301,10 +309,11 @@ function initReceiver(targetId) {
 
     peer.on('open', (id) => {
         // Connect to the sender
-        conn = peer.connect(targetId, {
+        const c = peer.connect(targetId, {
             reliable: true
         });
-        setupConnectionEvents('Receiver');
+        conn = c;
+        setupConnectionEvents('Receiver', c);
     });
 
     peer.on('error', (err) => {
@@ -354,6 +363,7 @@ function handleData(data) {
         const url = URL.createObjectURL(blob);
 
         updateStatus('connected', 'Received Successfully');
+        isTransferring = false;
         dom.transferPercent.textContent = 'Completed';
         dom.transferActions.classList.remove('hidden');
         dom.downloadBtn.style.display = 'flex';
@@ -377,40 +387,48 @@ function handleData(data) {
 // Shared Logic
 // ------------------------------------------------
 
-function setupConnectionEvents(role) {
-    conn.on('open', () => {
+function setupConnectionEvents(role, c) {
+    const handleOpen = () => {
         updateStatus('connected', 'Connected');
         console.log(`${role} connected to peer`);
 
         if (role === 'Sender') {
             // Check for pending file or notify waiting
-            if (pendingFile) {
+            if (pendingFile && !isTransferring) {
                 console.log('Sending pending file:', pendingFile.name);
                 showView('transfer');
                 dom.fileName.textContent = pendingFile.name;
                 dom.fileSize.textContent = formatBytes(pendingFile.size);
                 dom.transferActions.classList.add('hidden');
                 updateStatus('connected', 'Sending queued file...');
+                isTransferring = true;
                 sendMetadata(pendingFile);
                 sendFile(pendingFile);
                 pendingFile = null;
-            } else {
+            } else if (!isTransferring) {
                 console.log('No pending file, sending waiting-for-file notification');
-                conn.send({ type: 'waiting-for-file' });
+                c.send({ type: 'waiting-for-file' });
                 const dropText = dom.dropZone.querySelector('p');
                 const dropTitle = dom.dropZone.querySelector('h3');
                 if (dropText) dropText.textContent = 'Peer connected. Ready to send.';
                 if (dropTitle) dropTitle.textContent = 'Transfer Ready';
             }
         }
-    });
+    };
 
-    conn.on('data', (data) => {
-        // Both roles might eventually receive data for control messages
+    if (c.open) {
+        handleOpen();
+    } else {
+        c.on('open', handleOpen);
+    }
+
+    c.on('data', (data) => {
+        if (data.type === 'metadata') isTransferring = true;
         handleData(data);
     });
 
-    conn.on('close', () => {
+    c.on('close', () => {
+        isTransferring = false;
         updateStatus('disconnected', 'Peer Disconnected');
         console.log('Connection closed. Waiting for peer to reconnect...');
         // If we are the receiver, we might want to try reconnecting to the sender
