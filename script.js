@@ -25,7 +25,8 @@ const dom = {
     infoBtn: document.getElementById('info-btn'),
     infoModal: document.getElementById('info-modal'),
     closeModalBtn: document.getElementById('close-modal-btn'),
-    readmeContent: document.getElementById('readme-content')
+    readmeContent: document.getElementById('readme-content'),
+    senderPersistentTools: document.getElementById('sender-persistent-tools')
 };
 
 // Application State
@@ -165,6 +166,7 @@ function updateStatus(status, text) {
 
 function initSender() {
     showView('home');
+    dom.senderPersistentTools.classList.remove('hidden');
     updateStatus('connecting', 'Connecting to network...');
 
     peer = createPeer();
@@ -203,24 +205,21 @@ function initSender() {
         setTimeout(handlePeerReconnection, 3000);
     });
 }
-
 function handleFileSelection(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Switch to transfer view immediately to show selection
-    showView('transfer');
-    dom.fileName.textContent = file.name;
-    dom.fileSize.textContent = formatBytes(file.size);
-    dom.transferActions.classList.add('hidden');
-
     if (conn && conn.open) {
-        // Connected: Send immediately
+        // Connected: Switch view and send immediately
+        showView('transfer');
+        dom.fileName.textContent = file.name;
+        dom.fileSize.textContent = formatBytes(file.size);
+        dom.transferActions.classList.add('hidden');
         dom.statusText.textContent = "Sending...";
         sendMetadata(file);
         sendFile(file);
     } else {
-        // Not connected: Queue
+        // Not connected: Queue and show info in drop-zone without switching view
         pendingFile = file;
         console.log('File queued. Waiting for connection...');
         updateStatus('disconnected', 'File ready. Waiting for peer...');
@@ -228,8 +227,14 @@ function handleFileSelection(e) {
         // Provide visual feedback in the home view that the file is ready
         const dropText = dom.dropZone.querySelector('p');
         const dropTitle = dom.dropZone.querySelector('h3');
-        if (dropText) dropText.textContent = 'File will be sent once peer connects.';
-        if (dropTitle) dropTitle.textContent = 'File: ' + file.name;
+        const dropIcon = dom.dropZone.querySelector('i');
+
+        if (dropIcon) {
+            dropIcon.className = 'ph-duotone ph-check-circle icon-large';
+            dropIcon.style.color = 'var(--success)';
+        }
+        if (dropText) dropText.textContent = 'File will be sent once peer connects. Keep this tab open and share the link.';
+        if (dropTitle) dropTitle.textContent = 'File Ready: ' + file.name;
     }
 }
 
@@ -381,6 +386,10 @@ function setupConnectionEvents(role) {
             // Check for pending file or notify waiting
             if (pendingFile) {
                 console.log('Sending pending file:', pendingFile.name);
+                showView('transfer');
+                dom.fileName.textContent = pendingFile.name;
+                dom.fileSize.textContent = formatBytes(pendingFile.size);
+                dom.transferActions.classList.add('hidden');
                 updateStatus('connected', 'Sending queued file...');
                 sendMetadata(pendingFile);
                 sendFile(pendingFile);

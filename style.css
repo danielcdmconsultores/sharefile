@@ -212,6 +212,11 @@ body {
     font-size: 1.1rem;
 }
 
+/* Persistent Tools */
+#sender-persistent-tools {
+    margin-bottom: 2rem;
+}
+
 /* Action Cards */
 .action-card {
     background: rgba(255, 255, 255, 0.03);
