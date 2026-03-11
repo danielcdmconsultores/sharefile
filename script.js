@@ -419,7 +419,7 @@ function handleData(data) {
 function setupConnectionEvents(role, c) {
     const handleOpen = () => {
         updateStatus('connected', 'Connected');
-        console.log(`${role} data channel open. c.open=${c.open}`);
+        console.log(`${role} data channel open.`);
 
         if (role === 'Receiver') {
             // Send a 'ready' message to tell the sender it can push data.
@@ -433,11 +433,8 @@ function setupConnectionEvents(role, c) {
         }
     };
 
-    if (c.open) {
-        handleOpen();
-    } else {
-        c.on('open', handleOpen);
-    }
+    // ALWAYS use the event listener. c.open might be true internally before it's actually ready to send data payload reliably in PeerJS.
+    c.on('open', handleOpen);
 
     c.on('data', (data) => {
         if (data.type === 'metadata') isTransferring = true;
