@@ -42,6 +42,7 @@ let lastBytes = 0;
 let currentTransferBytes = 0;
 let pendingFile = null;
 let isTransferring = false;
+let peerIsReady = false;
 
 // Configuration
 const CHUNK_SIZE = 16384; // 16KB chunks
@@ -187,6 +188,7 @@ function initSender() {
             return;
         }
         conn = c;
+        peerIsReady = false; // reset for new connection
         setupConnectionEvents('Sender', c);
     });
 
@@ -215,20 +217,15 @@ function handleFileSelection(e) {
     const file = e.target.files[0];
     if (!file) return;
 
-    if (conn && conn.open && !isTransferring) {
-        // Connected: Switch view and send immediately
-        showView('transfer');
-        dom.fileName.textContent = file.name;
-        dom.fileSize.textContent = formatBytes(file.size);
-        dom.transferActions.classList.add('hidden');
-        dom.statusText.textContent = "Sending...";
-        isTransferring = true;
-        sendMetadata(file);
-        sendFile(file);
+    pendingFile = file;
+
+    if (peerIsReady && !isTransferring) {
+        // Connected: Send immediately via our robust handler
+        console.log('File selected and peer is ready. Sending immediately.');
+        senderHandleReceiverReady(conn);
     } else {
         // Not connected: Queue and show info in drop-zone without switching view
-        pendingFile = file;
-        console.log('File queued. Waiting for connection...');
+        console.log('File queued. Waiting for connection or readiness...');
         updateStatus('disconnected', 'File ready. Waiting for peer...');
         
         // Provide visual feedback in the home view that the file is ready
@@ -263,7 +260,7 @@ function sendFile(file) {
     const reader = new FileReader();
 
     reader.onload = (e) => {
-        if (!conn || !conn.open) return; // Stop if disconnected
+        if (!peerIsReady || !conn) return; // Stop if disconnected
 
         conn.send({
             type: 'chunk',
@@ -364,6 +361,7 @@ function handleData(data) {
     if (data.type === 'ready') {
         // Receiver confirms its data channel is open.
         console.log('[Sender] Received ready signal from receiver');
+        peerIsReady = true;
         senderHandleReceiverReady(conn);
     } else if (data.type === 'metadata') {
         // Prepare to receive
@@ -418,6 +416,7 @@ function handleData(data) {
 
 function setupConnectionEvents(role, c) {
     const handleOpen = () => {
+        peerIsReady = true;
         updateStatus('connected', 'Connected');
         console.log(`${role} data channel open.`);
 
@@ -442,6 +441,7 @@ function setupConnectionEvents(role, c) {
     });
 
     c.on('close', () => {
+        peerIsReady = false;
         isTransferring = false;
         updateStatus('disconnected', 'Peer Disconnected');
         console.log('Connection closed. Waiting for peer to reconnect...');
