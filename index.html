@@ -75,7 +75,7 @@
                     <h3>Choose a file to share (copy and share the link first of course)</h3>
                     <p>Select now, send when connected.</p>
                 </div>
-                <input type="file" id="file-input" />
+                <input type="file" id="file-input" title="Choose a file to share" aria-label="Choose a file to share" />
             </div>
         </section>
 
@@ -106,7 +106,7 @@
 
             <div class="progress-container">
                 <div class="progress-bar">
-                    <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+                    <div id="progress-fill" class="progress-fill"></div>
                 </div>
                 <div class="progress-stats">
                     <span id="transfer-percentage">0%</span>
@@ -140,8 +140,7 @@
             </div>
         </div>
 
-        <div id="version-display"
-            style="margin-top: 1rem; text-align: center; font-size: 0.75rem; color: var(--text-muted); font-family: monospace;">
+        <div id="version-display" class="version-display">
         </div>
         <script>
             (function () {

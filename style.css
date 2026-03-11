@@ -631,3 +631,11 @@ body {
     background: none;
     padding: 0;
 }
+
+.version-display {
+    margin-top: 1rem;
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: monospace;
+}

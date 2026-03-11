@@ -103,6 +103,23 @@ ShareFile no escanea los archivos. El receptor debe comprobarlos con su antiviru
 
 ---  
 
+## 🔄  Últimas Mejoras (Actualizaciones)
+
+Para garantizar la mejor experiencia y fiabilidad, ShareFile ha recibido recientemente las siguientes actualizaciones:
+
+1. **Alta Fiabilidad de Conexión (NAT Traversal)**
+   - Se ha reemplazado el uso de servidores TURN limitados por una batería robusta de servidores **STUN públicos de alta disponibilidad** (Google, Cloudflare, Mozilla).
+   - Se ha reescrito por completo la máquina de estados de conexión para garantizar que la transferencia de archivos comience de forma impecable sin importar si el archivo se selecciona antes, durante o después de que el destinatario abra el enlace.
+
+2. **Mejoras de Usabilidad (UX)**
+   - **Enlace Persistente:** Ahora el remitente siempre tiene a la vista el enlace para compartir, incluso después de haber seleccionado el archivo a enviar.
+   - **Feedback Visual:** La zona de carga indica claramente cuándo un archivo está en cola esperando a que el destinatario se conecte.
+
+3. **Accesibilidad (A11y)**
+   - Se han añadido etiquetas funcionales (`aria-label` y `title`) a todos los botones de iconos para garantizar que la aplicación sea plenamente utilizable mediante lectores de pantalla y ofrezca *tooltips* al pasar el ratón.
+
+---  
+
 ### 🎉  ¡Listo!  
 
-Con tan solo abrir una página y compartir un pequeño código, puedes enviar archivos de forma segura y sin depender de servicios externos. ¡Disfruta de la transferencia directa y **libre de servidores**!  
+Con tan solo abrir una página y compartir un pequeño enlace, puedes enviar archivos de forma segura y sin depender de servicios externos. ¡Disfruta de la transferencia directa y **libre de servidores**!  
