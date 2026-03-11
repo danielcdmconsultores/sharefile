@@ -179,17 +179,7 @@ function initSender() {
         // When a receiver connects to us
         conn = c;
         setupConnectionEvents('Sender');
-        
-        // Immediately notify receiver of our state
-        setTimeout(() => {
-            if (conn && conn.open) {
-                if (pendingFile) {
-                    sendMetadata(pendingFile);
-                } else {
-                    conn.send({ type: 'waiting-for-file' });
-                }
-            }
-        }, 500);
+        // Logic moved to 'open' event in setupConnectionEvents for better reliability
     });
 
     peer.on('error', (err) => {
@@ -388,24 +378,27 @@ function setupConnectionEvents(role) {
         console.log(`${role} connected to peer`);
 
         if (role === 'Sender') {
-            // Check for pending file
+            // Check for pending file or notify waiting
             if (pendingFile) {
-                console.log('Found pending file, sending now...');
+                console.log('Sending pending file:', pendingFile.name);
                 updateStatus('connected', 'Sending queued file...');
                 sendMetadata(pendingFile);
                 sendFile(pendingFile);
                 pendingFile = null;
             } else {
-                dom.dropZone.querySelector('p').textContent = 'Peer connected. Click to choose file.';
-                dom.dropZone.querySelector('h3').textContent = 'Ready to Send';
+                console.log('No pending file, sending waiting-for-file notification');
+                conn.send({ type: 'waiting-for-file' });
+                const dropText = dom.dropZone.querySelector('p');
+                const dropTitle = dom.dropZone.querySelector('h3');
+                if (dropText) dropText.textContent = 'Peer connected. Ready to send.';
+                if (dropTitle) dropTitle.textContent = 'Transfer Ready';
             }
         }
     });
 
     conn.on('data', (data) => {
-        if (role === 'Receiver') {
-            handleData(data);
-        }
+        // Both roles might eventually receive data for control messages
+        handleData(data);
     });
 
     conn.on('close', () => {
