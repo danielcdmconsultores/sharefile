@@ -579,20 +579,23 @@ body {
     border-radius: 20px;
     width: 100%;
     /* Fill available space respecting parent padding */
-    max-width: 1200px;
+    max-width: 800px;
     /* Large max-width for less vertical scroll on desktops */
     max-height: 92vh;
     display: flex;
     flex-direction: column;
     box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
 }
 
 .modal-header {
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--glass-border);
     display: flex;
     justify-content: space-between;
     align-items: center;
+    background: #1e293b;
+    z-index: 10;
 }
 
 .modal-header h2 {
@@ -607,6 +610,15 @@ body {
 
 .modal-header .icon-btn-header:hover {
     background: rgba(255, 255, 255, 0.1);
+}
+
+.modal-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--glass-border);
+    display: flex;
+    justify-content: flex-end;
+    background: #1e293b;
+    z-index: 10;
 }
 
 .markdown-body {

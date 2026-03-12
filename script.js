@@ -26,6 +26,7 @@ const dom = {
     infoModal: document.getElementById('info-modal'),
     closeModalBtn: document.getElementById('close-modal-btn'),
     readmeContent: document.getElementById('readme-content'),
+    closeModalBottomBtn: document.getElementById('close-modal-bottom-btn'),
     senderPersistentTools: document.getElementById('sender-persistent-tools'),
     langSelector: document.getElementById('lang-selector')
 };
@@ -69,6 +70,7 @@ const translations = {
         btn_send_another: "Send Another",
         
         modal_title: "About ShareFile",
+        btn_close: "Close",
         error_load_readme: "Error loading info: ",
         
         units: ['Bytes', 'KB', 'MB', 'GB', 'TB']
@@ -111,6 +113,7 @@ const translations = {
         btn_send_another: "Enviar otro",
         
         modal_title: "Acerca de ShareFile",
+        btn_close: "Cerrar",
         error_load_readme: "Error al cargar la información: ",
         
         units: ['Bytes', 'KB', 'MB', 'GB', 'TB']
@@ -166,6 +169,7 @@ function init() {
     // Modal Events
     dom.infoBtn.addEventListener('click', openInfoModal);
     dom.closeModalBtn.addEventListener('click', closeInfoModal);
+    dom.closeModalBottomBtn.addEventListener('click', closeInfoModal);
     dom.infoModal.addEventListener('click', (e) => {
         if (e.target === dom.infoModal) closeInfoModal();
     });
