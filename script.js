@@ -26,8 +26,98 @@ const dom = {
     infoModal: document.getElementById('info-modal'),
     closeModalBtn: document.getElementById('close-modal-btn'),
     readmeContent: document.getElementById('readme-content'),
-    senderPersistentTools: document.getElementById('sender-persistent-tools')
+    senderPersistentTools: document.getElementById('sender-persistent-tools'),
+    langSelector: document.getElementById('lang-selector')
 };
+
+const translations = {
+    en: {
+        status_initializing: "Initializing...",
+        status_connecting: "Connecting to network...",
+        status_waiting_peer: "Waiting for peer...",
+        status_connecting_sender: "Connecting to sender...",
+        status_reconnecting: "Network Error. Reconnecting...",
+        status_disconnected: "Disconnected. Retrying...",
+        status_connected: "Connected",
+        status_sending: "Sending queued file...",
+        status_receiving: "Receiving...",
+        status_received: "Received Successfully",
+        status_waiting_file: "Waiting for file...",
+        status_error: "Network Error",
+        
+        step_share_link: "Share your link",
+        link_placeholder: "Generating secure link...",
+        hint_send_link: "Send this link to the recipient to start.",
+        
+        hero_title: "Transfer Files <br>Without Limits",
+        hero_subtitle: "Secure peer-to-peer sharing. No servers, no size limits, no ads.",
+        
+        drop_title: "Choose a file to share (copy and share the link first of course)",
+        drop_hint: "Select now, send when connected.",
+        drop_queued_title: "File Ready: ",
+        drop_queued_hint: "File will be sent once peer connects. Keep this tab open and share the link.",
+        drop_ready_title: "Transfer Ready",
+        drop_ready_hint: "Peer connected. Ready to send.",
+        
+        receive_title: "Receiving File",
+        receive_subtitle: "Connected securely to peer.",
+        receive_loader: "Waiting for sender to choose file...",
+        receive_connected: "Connected. Waiting for sender to select a file...",
+        
+        transfer_completed: "Completed",
+        btn_download: "Download",
+        btn_send_another: "Send Another",
+        
+        modal_title: "About ShareFile",
+        error_load_readme: "Error loading info: ",
+        
+        units: ['Bytes', 'KB', 'MB', 'GB', 'TB']
+    },
+    es: {
+        status_initializing: "Inicializando...",
+        status_connecting: "Conectando a la red...",
+        status_waiting_peer: "Esperando par...",
+        status_connecting_sender: "Conectando al remitente...",
+        status_reconnecting: "Error de red. Reconectando...",
+        status_disconnected: "Desconectado. Reintentando...",
+        status_connected: "Conectado",
+        status_sending: "Enviando archivo en cola...",
+        status_receiving: "Recibiendo...",
+        status_received: "Recibido con éxito",
+        status_waiting_file: "Esperando archivo...",
+        status_error: "Error de red",
+        
+        step_share_link: "Comparte tu enlace",
+        link_placeholder: "Generando enlace seguro...",
+        hint_send_link: "Envía este enlace al destinatario para empezar.",
+        
+        hero_title: "Transfiere archivos <br>sin límites",
+        hero_subtitle: "Uso compartido seguro de punto a punto. Sin servidores, sin límites de tamaño, sin anuncios.",
+        
+        drop_title: "Elige un archivo para compartir (copia y comparte el enlace primero, por supuesto)",
+        drop_hint: "Selecciona ahora, envía cuando estés conectado.",
+        drop_queued_title: "Archivo listo: ",
+        drop_queued_hint: "el archivo se enviará una vez que el par se conecte. Mantén esta pestaña abierta y comparte el enlace.",
+        drop_ready_title: "Transferencia lista",
+        drop_ready_hint: "Par conectado. Listo para enviar.",
+        
+        receive_title: "Recibiendo archivo",
+        receive_subtitle: "Conectado de forma segura al par.",
+        receive_loader: "Esperando a que el remitente elija el archivo...",
+        receive_connected: "Conectado. Esperando a que el remitente seleccione un archivo...",
+        
+        transfer_completed: "Completado",
+        btn_download: "Descargar",
+        btn_send_another: "Enviar otro",
+        
+        modal_title: "Acerca de ShareFile",
+        error_load_readme: "Error al cargar la información: ",
+        
+        units: ['Bytes', 'KB', 'MB', 'GB', 'TB']
+    }
+};
+
+let currentLang = localStorage.getItem('lang') || (navigator.language.startsWith('es') ? 'es' : 'en');
 
 // Application State
 let peer = null;
@@ -62,6 +152,11 @@ function init() {
         initSender();
     }
 
+    // Language selector
+    dom.langSelector.value = currentLang;
+    dom.langSelector.addEventListener('change', (e) => setLanguage(e.target.value));
+    setLanguage(currentLang);
+
     // Event Listeners
     dom.copyBtn.addEventListener('click', copyLink);
     // dom.dropZone click handled natively by the overlay input
@@ -88,10 +183,34 @@ function closeInfoModal() {
     dom.infoModal.classList.add('hidden');
 }
 
+function setLanguage(lang) {
+    currentLang = lang;
+    localStorage.setItem('lang', lang);
+    const t = translations[lang];
+
+    // Update static elements with data-i18n
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (t[key]) {
+            if (el.tagName === 'INPUT' && el.type === 'text') {
+                el.placeholder = t[key];
+            } else {
+                el.innerHTML = t[key];
+            }
+        }
+    });
+
+    // Update title/aria-labels if needed (handled via data-i18n or specific logic)
+
+    // Update current status text if it's not a dynamic ID
+    // Note: status text is often updated dynamically, so we need to be careful.
+}
+
 function loadReadme() {
-    fetch('README.md')
+    const readmeFile = currentLang === 'es' ? 'README.md' : 'README_en.md';
+    fetch(readmeFile)
         .then(response => {
-            if (!response.ok) throw new Error('Failed to load README.md');
+            if (!response.ok) throw new Error('Failed to load ' + readmeFile);
             return response.text();
         })
         .then(text => {
@@ -99,7 +218,7 @@ function loadReadme() {
             dom.readmeContent.innerHTML = marked.parse(text);
         })
         .catch(err => {
-            dom.readmeContent.innerHTML = `<p style="color: var(--error)">Error loading info: ${err.message}</p>`;
+            dom.readmeContent.innerHTML = `<p style="color: var(--error)">${translations[currentLang].error_load_readme}${err.message}</p>`;
         });
 }
 
@@ -143,9 +262,9 @@ function handlePeerReconnection() {
     }
 }
 
-function updateStatus(status, text) {
+function updateStatus(status, key) {
     dom.connectionStatus.className = `status-badge ${status}`;
-    dom.statusText.textContent = text;
+    dom.statusText.textContent = translations[currentLang][key] || key;
 }
 
 // ------------------------------------------------
@@ -155,12 +274,12 @@ function updateStatus(status, text) {
 function initSender() {
     showView('home');
     dom.senderPersistentTools.classList.remove('hidden');
-    updateStatus('connecting', 'Connecting to network...');
+    updateStatus('connecting', 'status_connecting');
 
     peer = createPeer();
 
     peer.on('open', (id) => {
-        updateStatus('disconnected', 'Waiting for peer...');
+        updateStatus('disconnected', 'status_waiting_peer');
         const shareUrl = `${window.location.origin}${window.location.pathname}?to=${id}`;
         dom.shareInput.value = shareUrl;
     });
@@ -185,10 +304,10 @@ function initSender() {
             // ID taken, should not happen with null ID but good to handle
             setTimeout(() => initSender(), 1000);
         } else if (err.type === 'disconnected' || err.type === 'network' || err.type === 'server-error') {
-            updateStatus('disconnected', 'Network Error. Reconnecting...');
+            updateStatus('disconnected', 'status_reconnecting');
             setTimeout(handlePeerReconnection, 3000);
         } else {
-            updateStatus('disconnected', 'Network Error');
+            updateStatus('disconnected', 'status_error');
             // Don't alert for every small issue, just show in status
             console.warn('Unhandled Peer error:', err.type);
         }
@@ -223,8 +342,8 @@ function handleFileSelection(e) {
             dropIcon.className = 'ph-duotone ph-check-circle icon-large';
             dropIcon.style.color = 'var(--success)';
         }
-        if (dropText) dropText.textContent = 'File will be sent once peer connects. Keep this tab open and share the link.';
-        if (dropTitle) dropTitle.textContent = 'File Ready: ' + file.name;
+        if (dropText) dropText.textContent = translations[currentLang].drop_queued_hint;
+        if (dropTitle) dropTitle.textContent = translations[currentLang].drop_queued_title + file.name;
     }
 }
 
@@ -265,7 +384,7 @@ function sendFile(file) {
             isTransferring = false;
             stopSpeedTracker();
             conn.send({ type: 'end' });
-            dom.transferPercent.textContent = 'Completed';
+            dom.transferPercent.textContent = translations[currentLang].transfer_completed;
             dom.transferActions.classList.remove('hidden');
             dom.downloadBtn.style.display = 'none'; // Sender doesn't download
         }
@@ -286,7 +405,7 @@ function sendFile(file) {
 
 function initReceiver(targetId) {
     showView('receiver');
-    updateStatus('connecting', 'Connecting to sender...');
+    updateStatus('connecting', 'status_connecting_sender');
 
     peer = createPeer();
 
@@ -301,7 +420,7 @@ function initReceiver(targetId) {
 
     peer.on('error', (err) => {
         console.error('Receiver Peer Error:', err.type, err);
-        updateStatus('disconnected', 'Connection Error. Retrying...');
+        updateStatus('disconnected', 'status_disconnected');
         
         if (err.type === 'peer-unavailable') {
             // Sender might be offline or ID changed
@@ -327,7 +446,7 @@ function senderHandleReceiverReady(c) {
         dom.fileName.textContent = pendingFile.name;
         dom.fileSize.textContent = formatBytes(pendingFile.size);
         dom.transferActions.classList.add('hidden');
-        updateStatus('connected', 'Sending queued file...');
+        updateStatus('connected', 'status_sending');
         isTransferring = true;
         const fileToSend = pendingFile;
         pendingFile = null;
@@ -338,8 +457,8 @@ function senderHandleReceiverReady(c) {
         c.send({ type: 'waiting-for-file' });
         const dropText = dom.dropZone.querySelector('p');
         const dropTitle = dom.dropZone.querySelector('h3');
-        if (dropText) dropText.textContent = 'Peer connected. Ready to send.';
-        if (dropTitle) dropTitle.textContent = 'Transfer Ready';
+        if (dropText) dropText.textContent = translations[currentLang].drop_ready_hint;
+        if (dropTitle) dropTitle.textContent = translations[currentLang].drop_ready_title;
     }
 }
 
@@ -360,7 +479,7 @@ function handleData(data) {
         dom.fileName.textContent = data.name;
         dom.fileSize.textContent = formatBytes(data.size);
         dom.transferActions.classList.add('hidden');
-        dom.statusText.textContent = "Receiving...";
+        updateStatus('connected', 'status_receiving');
 
         startSpeedTracker();
     } else if (data.type === 'chunk') {
@@ -375,9 +494,9 @@ function handleData(data) {
         const blob = new Blob(fileBuffer);
         const url = URL.createObjectURL(blob);
 
-        updateStatus('connected', 'Received Successfully');
+        updateStatus('connected', 'status_received');
         isTransferring = false;
-        dom.transferPercent.textContent = 'Completed';
+        dom.transferPercent.textContent = translations[currentLang].transfer_completed;
         dom.transferActions.classList.remove('hidden');
         dom.downloadBtn.style.display = 'flex';
 
@@ -391,8 +510,8 @@ function handleData(data) {
         };
     } else if (data.type === 'waiting-for-file') {
         const loaderText = document.querySelector('#receiver-loader p');
-        if (loaderText) loaderText.textContent = 'Connected. Waiting for sender to select a file...';
-        updateStatus('connected', 'Waiting for file...');
+        if (loaderText) loaderText.textContent = translations[currentLang].receive_connected;
+        updateStatus('connected', 'status_waiting_file');
     }
 }
 
@@ -403,7 +522,7 @@ function handleData(data) {
 function setupConnectionEvents(role, c) {
     const handleOpen = () => {
         peerIsReady = true;
-        updateStatus('connected', 'Connected');
+        updateStatus('connected', 'status_connected');
         console.log(`${role} data channel open.`);
 
         if (role === 'Receiver') {
@@ -429,7 +548,7 @@ function setupConnectionEvents(role, c) {
     c.on('close', () => {
         peerIsReady = false;
         isTransferring = false;
-        updateStatus('disconnected', 'Peer Disconnected');
+        updateStatus('disconnected', 'status_disconnected');
         console.log('Connection closed. Waiting for peer to reconnect...');
         if (role === 'Receiver') {
             setTimeout(() => {
@@ -442,7 +561,7 @@ function setupConnectionEvents(role, c) {
 
     c.on('error', (err) => {
         console.error('Connection error:', err);
-        updateStatus('disconnected', 'Connection Error');
+        updateStatus('disconnected', 'status_error');
     });
 }
 
@@ -492,10 +611,10 @@ function startSpeedTracker() {
 }
 
 function formatBytes(bytes, decimals = 2) {
-    if (bytes === 0) return '0 Bytes';
+    if (bytes === 0) return '0 ' + translations[currentLang].units[0];
     const k = 1024;
     const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const sizes = translations[currentLang].units;
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }

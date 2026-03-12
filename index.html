@@ -40,9 +40,15 @@
             <button id="info-btn" class="icon-btn-header" aria-label="Information">
                 <i class="ph-bold ph-question"></i>
             </button>
+            <div class="lang-container">
+                <select id="lang-selector" class="lang-selector" aria-label="Select Language">
+                    <option value="en">EN</option>
+                    <option value="es">ES</option>
+                </select>
+            </div>
             <div id="connection-status" class="status-badge disconnected">
                 <div class="status-dot"></div>
-                <span id="status-text">Initializing...</span>
+                <span id="status-text" data-i18n="status_initializing">Initializing...</span>
             </div>
         </header>
 
@@ -50,30 +56,30 @@
             <div class="action-card">
                 <div class="step-indicator">
                     <span class="step-num">1</span>
-                    <span class="step-text">Share your link</span>
+                    <span class="step-text" data-i18n="step_share_link">Share your link</span>
                 </div>
                 <div class="link-box">
-                    <input type="text" id="share-link-input" readonly placeholder="Generating secure link..." />
+                    <input type="text" id="share-link-input" readonly placeholder="Generating secure link..." data-i18n="link_placeholder" />
                     <button id="copy-btn" class="btn-icon" aria-label="Copy Link" title="Copy Link">
                         <i class="ph-bold ph-copy"></i>
                     </button>
                 </div>
-                <p class="hint-text">Send this link to the recipient to start.</p>
+                <p class="hint-text" data-i18n="hint_send_link">Send this link to the recipient to start.</p>
             </div>
         </div>
 
         <!-- View 1: Home / Sender -->
         <section id="view-home" class="view active">
             <div class="hero-text">
-                <h1>Transfer Files <br>Without Limits</h1>
-                <p>Secure peer-to-peer sharing. No servers, no size limits, no ads.</p>
+                <h1 data-i18n="hero_title">Transfer Files <br>Without Limits</h1>
+                <p data-i18n="hero_subtitle">Secure peer-to-peer sharing. No servers, no size limits, no ads.</p>
             </div>
 
             <div id="drop-zone" class="drop-zone">
                 <div class="drop-content">
                     <i class="ph-duotone ph-cloud-arrow-up icon-large"></i>
-                    <h3>Choose a file to share (copy and share the link first of course)</h3>
-                    <p>Select now, send when connected.</p>
+                    <h3 data-i18n="drop_title">Choose a file to share (copy and share the link first of course)</h3>
+                    <p data-i18n="drop_hint">Select now, send when connected.</p>
                 </div>
                 <input type="file" id="file-input" title="Choose a file to share" aria-label="Choose a file to share" />
             </div>
@@ -82,13 +88,13 @@
         <!-- View 2: Receiver (Active when opening a link) -->
         <section id="view-receiver" class="view hidden">
             <div class="hero-text">
-                <h1>Receiving File</h1>
-                <p>Connected securely to peer.</p>
+                <h1 data-i18n="receive_title">Receiving File</h1>
+                <p data-i18n="receive_subtitle">Connected securely to peer.</p>
             </div>
 
             <div class="loader-container" id="receiver-loader">
                 <div class="spinner"></div>
-                <p>Waiting for sender to choose file...</p>
+                <p data-i18n="receive_loader">Waiting for sender to choose file...</p>
             </div>
         </section>
 
@@ -116,9 +122,9 @@
 
             <div id="transfer-actions" class="transfer-actions hidden">
                 <button id="download-btn" class="btn-primary">
-                    <i class="ph-bold ph-download-simple"></i> Download
+                    <i class="ph-bold ph-download-simple"></i> <span data-i18n="btn_download">Download</span>
                 </button>
-                <button id="reset-btn" class="btn-secondary">Send Another</button>
+                <button id="reset-btn" class="btn-secondary" data-i18n="btn_send_another">Send Another</button>
             </div>
         </section>
 
@@ -126,7 +132,7 @@
         <div id="info-modal" class="modal-overlay hidden">
             <div class="modal-content glass-panel">
                 <div class="modal-header">
-                    <h2>About ShareFile</h2>
+                    <h2 data-i18n="modal_title">About ShareFile</h2>
                     <button id="close-modal-btn" class="icon-btn-header" aria-label="Close" title="Close">
                         <i class="ph-bold ph-x"></i>
                     </button>
