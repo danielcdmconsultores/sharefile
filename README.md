@@ -1,4 +1,4 @@
-# **ShareFile** – Transferencia P2P de archivos sin servidores  
+# **ShareFile** – Transferencia segura P2P de archivos, sin servidores  
 
 > **Aviso del creador**: El autor no se hace responsable del contenido compartido ni de los daños que pueda causar el uso de la aplicación. Úsala bajo tu propio riesgo.
 
@@ -7,7 +7,7 @@
 ## 📦  ¿Qué es ShareFile?  
 
 - **Aplicación web** que permite enviar archivos directamente de un navegador a otro, sin pasar por servidores de almacenamiento.  
-- **No requiere instalación**: basta con abrir la URL `https://danielcdmconsultores.github.io/sharefile/`.  
+- **No requiere instalación**: basta con abrir la URL `https://danielcdmconsultores.github.io/sharefile/`.  [https://danielcdmconsultores.github.io/sharefile/](https://danielcdmconsultores.github.io/sharefile/)
 - **Cifrado de extremo a extremo**: los datos viajan encriptados, por lo que nadie en la red puede leerlos.  
 - **Libre de anuncios, rastreadores y malware** – el código es abierto y no incluye terceros publicitarios.  
 
@@ -19,18 +19,18 @@
    Cada vez que abres la página, y le das a copiar la url, el navegador crea un **ID** que lo identifica en la red. Piensa en él como un número de teléfono virtual.  (está en la propia url)
 
 2. **Señalización ligera**  
-   Para que dos navegadores se “encuentren”, primero intercambian sus IDs a través de un **pequeño servidor de señalización**. Este servidor solo pasa los IDs, **no almacena ni ve** los archivos, típico en p2p.  
+   Para que dos navegadores se “encuentren”, primero intercambian sus IDs a través de un **pequeño servidor de señalización**. Este servidor solo pasa los IDs, **no almacena ni ve** los archivos, típico en p2p. están en el script.js y sueles ser los típicos de google como stun:stun.l.google.com
 
 3. **Conexión directa**  
    Una vez que cada parte conoce el ID del otro, gracias a la **librería PeerJS** gestiona todo lo necesario para abrir un túnel directo entre los navegadores.  
    - La librería se encarga de la “negociación” (quién envía primero, cómo se conectan, etc.).  
-   - Después de la negociación, los navegadores se comunican **directamente**, como si estuvieran conectados por un cable virtual.  
+   - Después de la negociación, los navegadores se comunican **directamente**, como si estuvieran conectados por un cable virtual seguro.  
 
 4. **Transferencia de datos**  
    El archivo se parte en pequeños trozos y se envía a través del túnel. Cada trozo llega en orden y sin perderse, porque la propia librería cuida la fiabilidad.  
 
 5. **Fin de la sesión**  
-   Cuando el último trozo llega, el receptor vuelve a armar el archivo y lo ofrece para su descarga. Todo el proceso ocurre en la memoria de los dos navegadores; al cerrar la pestaña, desaparece.  
+   Cuando el último trozo llega, el receptor vuelve a armar el archivo y lo ofrece para su descarga. Todo el proceso ocurre en la memoria de los dos navegadores; al cerrar la pestaña de esta web, desaparece.  
 
 ---  
 
