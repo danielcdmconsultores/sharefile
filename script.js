@@ -462,6 +462,17 @@ function sendFile(file) {
     startSpeedTracker();
 
     const reader = new FileReader();
+    const BUFFER_THRESHOLD = 64 * 1024; // 64 KB safety buffer threshold
+
+    const finishSending = () => {
+        console.log('[Sender] File sent successfully.');
+        isTransferring = false;
+        stopSpeedTracker();
+        conn.send({ type: 'end' });
+        dom.transferPercent.textContent = translations[currentLang].transfer_completed;
+        dom.transferActions.classList.remove('hidden');
+        dom.downloadBtn.style.display = 'none';
+    };
 
     reader.onload = (e) => {
         if (!peerIsReady || !conn) return; // Aborted – disconnected mid-transfer
@@ -473,15 +484,18 @@ function sendFile(file) {
         updateProgress(offset, file.size);
 
         if (offset < file.size) {
-            readNextChunk();
+            const rawChannel = conn.dataChannel;
+            if (rawChannel && rawChannel.bufferedAmount > BUFFER_THRESHOLD) {
+                rawChannel.bufferedAmountLowThreshold = BUFFER_THRESHOLD;
+                rawChannel.onbufferedamountlow = () => {
+                    rawChannel.onbufferedamountlow = null; // Clean up listener
+                    readNextChunk();
+                };
+            } else {
+                readNextChunk();
+            }
         } else {
-            console.log('[Sender] File sent successfully.');
-            isTransferring = false;
-            stopSpeedTracker();
-            conn.send({ type: 'end' });
-            dom.transferPercent.textContent = translations[currentLang].transfer_completed;
-            dom.transferActions.classList.remove('hidden');
-            dom.downloadBtn.style.display = 'none';
+            finishSending();
         }
     };
 

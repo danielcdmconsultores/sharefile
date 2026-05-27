@@ -109,6 +109,7 @@ To ensure the best experience and reliability, ShareFile has recently received t
 1. **High Connection Reliability (NAT Traversal)**
    - Replaced the use of limited TURN servers with a robust set of **high-availability public STUN servers** (Google, Cloudflare, Mozilla).
    - Completely rewrote the connection state machine to ensure the file transfer starts flawlessly whether the file is selected before, during, or after the recipient opens the link.
+   - **Flow Control (Backpressure):** Implemented flow control utilizing `bufferedAmount` and the `onbufferedamountlow` event of the native WebRTC data channel. This prevents buffer saturation and sudden disconnects during transfers over slow networks or TURN relays.
 
 2. **Usability Improvements (UX)**
    - **Persistent Link:** The sender now always has the sharing link in view, even after selecting the file to send.

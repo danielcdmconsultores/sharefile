@@ -110,6 +110,7 @@ Para garantizar la mejor experiencia y fiabilidad, ShareFile ha recibido recient
 1. **Alta Fiabilidad de Conexión (NAT Traversal)**
    - Se ha reemplazado el uso de servidores TURN limitados por una batería robusta de servidores **STUN públicos de alta disponibilidad** (Google, Cloudflare, Mozilla).
    - Se ha reescrito por completo la máquina de estados de conexión para garantizar que la transferencia de archivos comience de forma impecable sin importar si el archivo se selecciona antes, durante o después de que el destinatario abra el enlace.
+   - **Control de Flujo (Backpressure):** Se ha implementado un control de flujo inteligente mediante `bufferedAmount` y el evento `onbufferedamountlow` del canal de datos WebRTC. Esto evita la saturación de memoria y las desconexiones abruptas cuando se transmiten archivos a través de conexiones lentas o TURN relays.
 
 2. **Mejoras de Usabilidad (UX)**
    - **Enlace Persistente:** Ahora el remitente siempre tiene a la vista el enlace para compartir, incluso después de haber seleccionado el archivo a enviar.
