@@ -37,8 +37,11 @@
                 <span>ShareFile<span class="highlight">Peer2Peer</span></span>
             </div>
 
-            <button id="info-btn" class="icon-btn-header" aria-label="Information">
+            <button id="info-btn" class="icon-btn-header" aria-label="Information" title="Information">
                 <i class="ph-bold ph-question"></i>
+            </button>
+            <button id="settings-btn" class="icon-btn-header" aria-label="Settings" title="Settings">
+                <i class="ph-bold ph-gear"></i>
             </button>
             <div class="lang-container">
                 <select id="lang-selector" class="lang-selector" aria-label="Select Language">
@@ -149,8 +152,124 @@
             </div>
         </div>
 
-        <div id="version-display" class="version-display">
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal-overlay hidden">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <h2 data-i18n="settings_title">Advanced Network Settings</h2>
+                    <button id="close-settings-btn" class="icon-btn-header" aria-label="Close" title="Close">
+                        <i class="ph-bold ph-x"></i>
+                    </button>
+                </div>
+                <div class="settings-body">
+                    <div class="settings-group">
+                        <h3 data-i18n="settings_turn_section">Custom TURN Server</h3>
+                        <div class="toggle-container">
+                            <label class="switch">
+                                <input type="checkbox" id="custom-turn-toggle" aria-label="Use Custom TURN Server">
+                                <span class="slider round"></span>
+                            </label>
+                            <span data-i18n="settings_use_custom_turn">Use Custom TURN Server</span>
+                        </div>
+                        <div id="custom-turn-fields" class="form-fields hidden">
+                            <div class="field-item">
+                                <label for="setting-turn-url" data-i18n="settings_turn_url">TURN / TURNS URL</label>
+                                <input type="text" id="setting-turn-url" placeholder="turns:your-turn.com:443?transport=tcp">
+                            </div>
+                            <div class="field-item">
+                                <label for="setting-turn-user" data-i18n="settings_turn_username">Username</label>
+                                <input type="text" id="setting-turn-user" placeholder="username">
+                            </div>
+                            <div class="field-item">
+                                <label for="setting-turn-pass" data-i18n="settings_turn_password">Password</label>
+                                <input type="password" id="setting-turn-pass" placeholder="password">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <h3 data-i18n="settings_signaling_section">Custom Signaling Server</h3>
+                        <div class="toggle-container">
+                            <label class="switch">
+                                <input type="checkbox" id="custom-sig-toggle" aria-label="Use Custom Signaling Server">
+                                <span class="slider round"></span>
+                            </label>
+                            <span data-i18n="settings_use_custom_sig">Use Custom Signaling Server</span>
+                        </div>
+                        <div id="custom-sig-fields" class="form-fields hidden">
+                            <div class="field-item">
+                                <label for="setting-sig-host" data-i18n="settings_sig_host">Signaling Host</label>
+                                <input type="text" id="setting-sig-host" placeholder="your-signaling.render.com">
+                            </div>
+                            <div class="field-item">
+                                <label for="setting-sig-port" data-i18n="settings_sig_port">Port</label>
+                                <input type="number" id="setting-sig-port" placeholder="443">
+                            </div>
+                            <div class="field-item">
+                                <label for="setting-sig-path" data-i18n="settings_sig_path">Path</label>
+                                <input type="text" id="setting-sig-path" placeholder="/" value="/">
+                            </div>
+                            <div class="toggle-container">
+                                <label class="switch">
+                                    <input type="checkbox" id="setting-sig-secure" checked aria-label="Secure (SSL / WSS)">
+                                    <span class="slider round"></span>
+                                </label>
+                                <span data-i18n="settings_sig_secure">Secure (SSL / WSS)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button id="reset-settings-btn" class="btn-secondary" data-i18n="btn_reset_defaults">Reset Defaults</button>
+                    <button id="save-settings-btn" class="btn-primary" data-i18n="btn_save">Save Settings</button>
+                </div>
+            </div>
         </div>
+
+        <!-- Connection Diagnostics -->
+        <div id="diagnostics-container" class="diagnostics-container collapsed">
+            <button id="diagnostics-toggle-btn" class="diagnostics-header">
+                <i class="ph-bold ph-activity icon-pulse"></i>
+                <span data-i18n="diag_title">Network Diagnostics</span>
+                <i id="diag-chevron" class="ph-bold ph-caret-up chevron"></i>
+            </button>
+            <div class="diagnostics-body">
+                <div class="diag-grid">
+                    <div class="diag-card">
+                        <span class="diag-label" data-i18n="diag_ice_state">ICE State</span>
+                        <span id="diag-ice-state" class="diag-value">disconnected</span>
+                    </div>
+                    <div class="diag-card">
+                        <span class="diag-label" data-i18n="diag_sig_state">Signaling State</span>
+                        <span id="diag-sig-state" class="diag-value">stable</span>
+                    </div>
+                    <div class="diag-card">
+                        <span class="diag-label" data-i18n="diag_conn_type">Connection Type</span>
+                        <span id="diag-conn-type" class="diag-value">None</span>
+                    </div>
+                    <div class="diag-card">
+                        <span class="diag-label" data-i18n="diag_transport">Transport Policy</span>
+                        <span id="diag-transport-policy" class="diag-value">All (Direct Preferred)</span>
+                    </div>
+                </div>
+                <div class="diag-candidates-section">
+                    <span class="diag-section-label" data-i18n="diag_ice_candidates">Gathered Candidates:</span>
+                    <div class="candidates-badges">
+                        <span id="candidate-host" class="badge inactive">
+                            <span class="badge-dot"></span> Host (LAN)
+                        </span>
+                        <span id="candidate-srflx" class="badge inactive">
+                            <span class="badge-dot"></span> Srflx (STUN)
+                        </span>
+                        <span id="candidate-relay" class="badge inactive">
+                            <span class="badge-dot"></span> Relay (TURN)
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="version-display" class="version-display"></div>
         <script>
             (function () {
                 const date = new Date(document.lastModified);

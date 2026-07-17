@@ -28,7 +28,36 @@ const dom = {
     readmeContent: document.getElementById('readme-content'),
     closeModalBottomBtn: document.getElementById('close-modal-bottom-btn'),
     senderPersistentTools: document.getElementById('sender-persistent-tools'),
-    langSelector: document.getElementById('lang-selector')
+    langSelector: document.getElementById('lang-selector'),
+
+    // Advanced Settings UI
+    settingsBtn: document.getElementById('settings-btn'),
+    settingsModal: document.getElementById('settings-modal'),
+    closeSettingsBtn: document.getElementById('close-settings-btn'),
+    saveSettingsBtn: document.getElementById('save-settings-btn'),
+    resetSettingsBtn: document.getElementById('reset-settings-btn'),
+    customTurnToggle: document.getElementById('custom-turn-toggle'),
+    customTurnFields: document.getElementById('custom-turn-fields'),
+    settingTurnUrl: document.getElementById('setting-turn-url'),
+    settingTurnUser: document.getElementById('setting-turn-user'),
+    settingTurnPass: document.getElementById('setting-turn-pass'),
+    customSigToggle: document.getElementById('custom-sig-toggle'),
+    customSigFields: document.getElementById('custom-sig-fields'),
+    settingSigHost: document.getElementById('setting-sig-host'),
+    settingSigPort: document.getElementById('setting-sig-port'),
+    settingSigPath: document.getElementById('setting-sig-path'),
+    settingSigSecure: document.getElementById('setting-sig-secure'),
+
+    // Diagnostics UI
+    diagnosticsContainer: document.getElementById('diagnostics-container'),
+    diagnosticsToggleBtn: document.getElementById('diagnostics-toggle-btn'),
+    diagIceState: document.getElementById('diag-ice-state'),
+    diagSigState: document.getElementById('diag-sig-state'),
+    diagConnType: document.getElementById('diag-conn-type'),
+    diagTransportPolicy: document.getElementById('diag-transport-policy'),
+    badgeHost: document.getElementById('candidate-host'),
+    badgeSrflx: document.getElementById('candidate-srflx'),
+    badgeRelay: document.getElementById('candidate-relay')
 };
 
 const translations = {
@@ -75,6 +104,30 @@ const translations = {
         btn_close: "Close",
         error_load_readme: "Error loading info: ",
 
+        settings_title: "Advanced Network Settings",
+        settings_turn_section: "Custom TURN Server",
+        settings_use_custom_turn: "Use Custom TURN Server",
+        settings_turn_url: "TURN / TURNS URL",
+        settings_turn_username: "Username",
+        settings_turn_password: "Password / Credential",
+        settings_signaling_section: "Custom Signaling Server",
+        settings_use_custom_sig: "Use Custom Signaling Server",
+        settings_sig_host: "Signaling Host",
+        settings_sig_port: "Port",
+        settings_sig_path: "Path",
+        settings_sig_secure: "Secure (SSL / WSS)",
+        btn_reset_defaults: "Reset Defaults",
+        btn_save: "Save Settings",
+
+        diag_title: "Network Diagnostics",
+        diag_ice_state: "ICE State",
+        diag_sig_state: "Signaling State",
+        diag_conn_type: "Connection Type",
+        diag_transport: "Transport Policy",
+        diag_ice_candidates: "Gathered Candidates:",
+        diag_policy_all: "All (Direct Preferred)",
+        diag_policy_relay: "Relay Only (Forced Relay)",
+
         units: ['Bytes', 'KB', 'MB', 'GB', 'TB']
     },
     es: {
@@ -120,6 +173,30 @@ const translations = {
         btn_close: "Cerrar",
         error_load_readme: "Error al cargar la información: ",
 
+        settings_title: "Ajustes Avanzados de Red",
+        settings_turn_section: "Servidor TURN Personalizado",
+        settings_use_custom_turn: "Usar Servidor TURN Personalizado",
+        settings_turn_url: "URL de TURN / TURNS",
+        settings_turn_username: "Nombre de usuario",
+        settings_turn_password: "Contraseña / Credencial",
+        settings_signaling_section: "Servidor de Señalización Personalizado",
+        settings_use_custom_sig: "Usar Servidor de Señalización Personalizado",
+        settings_sig_host: "Host de Señalización",
+        settings_sig_port: "Puerto",
+        settings_sig_path: "Ruta (Path)",
+        settings_sig_secure: "Seguro (SSL / WSS)",
+        btn_reset_defaults: "Valores por defecto",
+        btn_save: "Guardar Ajustes",
+
+        diag_title: "Diagnósticos de Red",
+        diag_ice_state: "Estado ICE",
+        diag_sig_state: "Estado de Señalización",
+        diag_conn_type: "Tipo de Conexión",
+        diag_transport: "Política de Transporte",
+        diag_ice_candidates: "Candidatos descubiertos:",
+        diag_policy_all: "Todos (Directo preferido)",
+        diag_policy_relay: "Sólo retransmisión (Relay)",
+
         units: ['Bytes', 'KB', 'MB', 'GB', 'TB']
     }
 };
@@ -148,6 +225,13 @@ let retryTimer = null;
 let connectionTimeoutTimer = null;
 let currentRole = null;       // 'sender' | 'receiver'
 let currentTargetId = null;   // receiver: the sender's peer ID
+
+// Advanced Resiliency & Diagnostics States
+let diagnosticsInterval = null;
+let forceRelayMode = false;           // If true, forces 'relay' ICE transport policy to bypass local firewall/mDNS
+let signalingServerIndex = 0;         // 0 = primary (PeerJS cloud), 1 = backup signaling server
+let mDnsFallbackTimer = null;         // Guard timer to detect connection stalls and force relay fallback
+let gatheredCandidates = { host: false, srflx: false, relay: false };
 
 const MAX_RETRY_ATTEMPTS = 10;
 const BASE_RETRY_DELAY_MS = 2000;
@@ -216,6 +300,8 @@ function destroyPeer() {
 init();
 
 function init() {
+    loadSettings();
+
     const urlParams = new URLSearchParams(window.location.search);
     const peerId = urlParams.get('to');
 
@@ -242,6 +328,34 @@ function init() {
     dom.infoModal.addEventListener('click', (e) => {
         if (e.target === dom.infoModal) closeInfoModal();
     });
+
+    // Settings Listeners
+    dom.settingsBtn.addEventListener('click', openSettingsModal);
+    dom.closeSettingsBtn.addEventListener('click', closeSettingsModal);
+    dom.saveSettingsBtn.addEventListener('click', saveSettings);
+    dom.resetSettingsBtn.addEventListener('click', resetSettings);
+    dom.settingsModal.addEventListener('click', (e) => {
+        if (e.target === dom.settingsModal) closeSettingsModal();
+    });
+
+    dom.customTurnToggle.addEventListener('change', (e) => {
+        if (e.target.checked) {
+            dom.customTurnFields.classList.remove('hidden');
+        } else {
+            dom.customTurnFields.classList.add('hidden');
+        }
+    });
+
+    dom.customSigToggle.addEventListener('change', (e) => {
+        if (e.target.checked) {
+            dom.customSigFields.classList.remove('hidden');
+        } else {
+            dom.customSigFields.classList.add('hidden');
+        }
+    });
+
+    // Diagnostics Toggle Listener
+    dom.diagnosticsToggleBtn.addEventListener('click', toggleDiagnostics);
 }
 
 function openInfoModal() {
@@ -251,6 +365,111 @@ function openInfoModal() {
 
 function closeInfoModal() {
     dom.infoModal.classList.add('hidden');
+}
+
+// ------------------------------------------------
+// Settings Management
+// ------------------------------------------------
+
+function openSettingsModal() {
+    dom.settingsModal.classList.remove('hidden');
+}
+
+function closeSettingsModal() {
+    dom.settingsModal.classList.add('hidden');
+}
+
+function toggleDiagnostics() {
+    const isCollapsed = dom.diagnosticsContainer.classList.contains('collapsed');
+    if (isCollapsed) {
+        dom.diagnosticsContainer.classList.remove('collapsed');
+        dom.diagnosticsContainer.classList.add('expanded');
+    } else {
+        dom.diagnosticsContainer.classList.remove('expanded');
+        dom.diagnosticsContainer.classList.add('collapsed');
+    }
+}
+
+function loadSettings() {
+    const useTurn = localStorage.getItem('setting_use_turn') === 'true';
+    const turnUrl = localStorage.getItem('setting_turn_url') || '';
+    const turnUser = localStorage.getItem('setting_turn_user') || '';
+    const turnPass = localStorage.getItem('setting_turn_pass') || '';
+
+    const useSig = localStorage.getItem('setting_use_sig') === 'true';
+    const sigHost = localStorage.getItem('setting_sig_host') || '';
+    const sigPort = localStorage.getItem('setting_sig_port') || '';
+    const sigPath = localStorage.getItem('setting_sig_path') || '/';
+    const sigSecure = localStorage.getItem('setting_sig_secure') !== 'false'; // default true
+
+    // Populate UI
+    dom.customTurnToggle.checked = useTurn;
+    dom.settingTurnUrl.value = turnUrl;
+    dom.settingTurnUser.value = turnUser;
+    dom.settingTurnPass.value = turnPass;
+
+    if (useTurn) {
+        dom.customTurnFields.classList.remove('hidden');
+    } else {
+        dom.customTurnFields.classList.add('hidden');
+    }
+
+    dom.customSigToggle.checked = useSig;
+    dom.settingSigHost.value = sigHost;
+    dom.settingSigPort.value = sigPort;
+    dom.settingSigPath.value = sigPath;
+    dom.settingSigSecure.checked = sigSecure;
+
+    if (useSig) {
+        dom.customSigFields.classList.remove('hidden');
+    } else {
+        dom.customSigFields.classList.add('hidden');
+    }
+
+    // Diagnostics Default Transport Value
+    updateDiagnosticsUI();
+}
+
+function saveSettings() {
+    localStorage.setItem('setting_use_turn', dom.customTurnToggle.checked);
+    localStorage.setItem('setting_turn_url', dom.settingTurnUrl.value.trim());
+    localStorage.setItem('setting_turn_user', dom.settingTurnUser.value.trim());
+    localStorage.setItem('setting_turn_pass', dom.settingTurnPass.value.trim());
+
+    localStorage.setItem('setting_use_sig', dom.customSigToggle.checked);
+    localStorage.setItem('setting_sig_host', dom.settingSigHost.value.trim());
+    localStorage.setItem('setting_sig_port', dom.settingSigPort.value.trim());
+    localStorage.setItem('setting_sig_path', dom.settingSigPath.value.trim());
+    localStorage.setItem('setting_sig_secure', dom.settingSigSecure.checked);
+
+    closeSettingsModal();
+    
+    // Reset connection with new settings applied
+    console.log('[Settings] Saved. Re-initializing network connections...');
+    signalingServerIndex = 0; // reset server failover cycle
+    forceRelayMode = false;   // reset forced relay
+    resetRetryCount();
+    
+    if (currentRole === 'receiver') {
+        initReceiver(currentTargetId);
+    } else {
+        initSender();
+    }
+}
+
+function resetSettings() {
+    localStorage.removeItem('setting_use_turn');
+    localStorage.removeItem('setting_turn_url');
+    localStorage.removeItem('setting_turn_user');
+    localStorage.removeItem('setting_turn_pass');
+    localStorage.removeItem('setting_use_sig');
+    localStorage.removeItem('setting_sig_host');
+    localStorage.removeItem('setting_sig_port');
+    localStorage.removeItem('setting_sig_path');
+    localStorage.removeItem('setting_sig_secure');
+
+    loadSettings();
+    saveSettings(); // triggers re-initialization to defaults
 }
 
 function setLanguage(lang) {
@@ -290,40 +509,90 @@ function loadReadme() {
 // ------------------------------------------------
 
 function createPeer() {
-    const peerConfig = {
+    const useTurn = localStorage.getItem('setting_use_turn') === 'true';
+    const turnUrl = localStorage.getItem('setting_turn_url') || '';
+    const turnUser = localStorage.getItem('setting_turn_user') || '';
+    const turnPass = localStorage.getItem('setting_turn_pass') || '';
+
+    const useSig = localStorage.getItem('setting_use_sig') === 'true';
+    const sigHost = localStorage.getItem('setting_sig_host') || '';
+    const sigPort = parseInt(localStorage.getItem('setting_sig_port'), 10) || null;
+    const sigPath = localStorage.getItem('setting_sig_path') || '/';
+    const sigSecure = localStorage.getItem('setting_sig_secure') !== 'false';
+
+    // 1. Build ICE Servers
+    let iceServers = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' },
+        { urls: 'stun:global.stun.twilio.com:3478' },
+        { urls: 'stun:stun.services.mozilla.com' },
+        { urls: 'stun:stun.cloudflare.com:3478' }
+    ];
+
+    if (useTurn && turnUrl) {
+        console.log('[NAT] Using custom TURN server:', turnUrl);
+        iceServers.push({
+            urls: turnUrl,
+            username: turnUser,
+            credential: turnPass
+        });
+    } else {
+        console.log('[NAT] Using default high-resilience secure TURNS relays.');
+        iceServers.push(
+            // Use secure TLS turns: on port 443 TCP/TLS
+            {
+                urls: 'turns:openrelay.metered.ca:443?transport=tcp',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turns:openrelay.metered.ca:443',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            },
+            {
+                urls: 'turn:openrelay.metered.ca:80',
+                username: 'openrelayproject',
+                credential: 'openrelayproject'
+            }
+        );
+    }
+
+    // Determine ICE transport policy (forced relay to bypass LAN blocks)
+    const policy = forceRelayMode ? 'relay' : 'all';
+    console.log('[NAT] Resolved ICE Transport Policy:', policy);
+
+    // 2. Build Peer Configuration Options
+    let peerConfig = {
         debug: 1,
         config: {
-            iceServers: [
-                { urls: 'stun:stun.l.google.com:19302' },
-                { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' },
-                { urls: 'stun:global.stun.twilio.com:3478' },
-                { urls: 'stun:stun.services.mozilla.com' },
-                { urls: 'stun:stun.cloudflare.com:3478' },
-                // Public TURN relay – last resort when STUN / direct fails
-                {
-                    urls: 'turn:openrelay.metered.ca:80',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                },
-                {
-                    urls: 'turn:openrelay.metered.ca:443',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                },
-                {
-                    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
-                }
-            ],
+            iceServers: iceServers,
             iceCandidatePoolSize: 10,
-            iceTransportPolicy: 'all'
+            iceTransportPolicy: policy
         },
         pingInterval: 5000
     };
+
+    // Apply custom or fallback signaling servers
+    if (useSig && sigHost) {
+        peerConfig.host = sigHost;
+        peerConfig.port = sigPort || (sigSecure ? 443 : 80);
+        peerConfig.path = sigPath;
+        peerConfig.secure = sigSecure;
+        console.log(`[Signaling] Connecting to custom server: ${sigHost}:${peerConfig.port}${sigPath}`);
+    } else if (signalingServerIndex > 0) {
+        // Fallback signaling server
+        peerConfig.host = 'peerjs-server-backup.onrender.com';
+        peerConfig.port = 443;
+        peerConfig.path = '/';
+        peerConfig.secure = true;
+        console.warn('[Signaling] Switched to redundant fallback signaling server.');
+    } else {
+        console.log('[Signaling] Connecting to default PeerJS cloud signaling.');
+    }
 
     return new Peer(null, peerConfig);
 }
@@ -396,6 +665,10 @@ function initSender() {
             scheduleRetry(() => initSender());
         } else if (['disconnected', 'network', 'server-error'].includes(err.type)) {
             updateStatus('disconnected', 'status_reconnecting');
+            if (signalingServerIndex === 0) {
+                signalingServerIndex = 1; // Cycle to fallback server
+                console.warn('[Sender] Server/network error. Switched signalingServerIndex to 1 (Backup).');
+            }
             scheduleRetry(() => initSender());
         } else {
             updateStatus('disconnected', 'status_error');
@@ -545,6 +818,10 @@ function initReceiver(targetId) {
             console.log('[Receiver] Sender unavailable. Will retry...');
             scheduleRetry(() => initReceiver(targetId));
         } else if (['disconnected', 'network', 'server-error'].includes(err.type)) {
+            if (signalingServerIndex === 0) {
+                signalingServerIndex = 1; // Try backup signaling server
+                console.warn('[Receiver] Server/network error. Switched signalingServerIndex to 1 (Backup).');
+            }
             scheduleRetry(() => initReceiver(targetId));
         } else {
             updateStatus('disconnected', 'status_error');
@@ -653,10 +930,16 @@ function handleData(data) {
 function setupConnectionEvents(role, c, retryFn) {
     let opened = false; // guard against duplicate open events
 
+    // Start diagnostics monitoring on the connection's peer connection
+    if (c && c.peerConnection) {
+        startDiagnostics(c.peerConnection);
+    }
+
     const handleOpen = () => {
         if (opened) return;
         opened = true;
         clearTimeout(connectionTimeoutTimer); // Cancel timeout – we made it!
+        clearMdnsFallbackTimer();            // Cancel local LAN check watchdog
         resetRetryCount();                   // Reset backoff counter on success
         peerIsReady = true;
         updateStatus('connected', 'status_connected');
@@ -686,6 +969,7 @@ function setupConnectionEvents(role, c, retryFn) {
         peerIsReady = false;
         isTransferring = false;
         stopSpeedTracker();
+        stopDiagnostics();
         updateStatus('disconnected', 'status_disconnected');
         console.log(`[${role}] Data channel closed.`);
 
@@ -698,6 +982,7 @@ function setupConnectionEvents(role, c, retryFn) {
     c.on('error', (err) => {
         console.error(`[${role}] Connection error:`, err);
         peerIsReady = false;
+        stopDiagnostics();
         updateStatus('disconnected', 'status_error');
         if (retryFn) scheduleRetry(retryFn);
     });
@@ -758,4 +1043,170 @@ function formatBytes(bytes, decimals = 2) {
     const sizes = translations[currentLang].units;
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+// ------------------------------------------------
+// Real-time WebRTC Diagnostics
+// ------------------------------------------------
+
+function startDiagnostics(pc) {
+    stopDiagnostics();
+    if (!pc) return;
+
+    console.log('[Diagnostics] Starting real-time WebRTC polling loop...');
+    
+    // Setup immediate listeners for state changes
+    pc.oniceconnectionstatechange = () => {
+        console.log('[Diagnostics] ICE Connection State changed:', pc.iceConnectionState);
+        updateDiagnosticsUI(pc);
+        
+        // LAN/mDNS Fallback Watchdog logic:
+        // If the ICE connection stalls in 'checking' or is 'disconnected' for over 6 seconds,
+        // force relay mode (TURN) to bypass direct local networking restrictions.
+        if (pc.iceConnectionState === 'checking' || pc.iceConnectionState === 'disconnected') {
+            startMdnsFallbackTimer();
+        } else if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+            clearMdnsFallbackTimer();
+            resetRetryCount();
+        }
+    };
+
+    pc.onicegatheringstatechange = () => {
+        console.log('[Diagnostics] ICE Gathering State changed:', pc.iceGatheringState);
+        updateDiagnosticsUI(pc);
+    };
+
+    pc.onsignalingstatechange = () => {
+        console.log('[Diagnostics] Signaling State changed:', pc.signalingState);
+        updateDiagnosticsUI(pc);
+    };
+
+    // Periodically query peer stats every 2 seconds
+    diagnosticsInterval = setInterval(() => {
+        updateDiagnosticsUI(pc);
+    }, 2000);
+
+    // Initial immediate update
+    updateDiagnosticsUI(pc);
+}
+
+function stopDiagnostics() {
+    if (diagnosticsInterval) {
+        clearInterval(diagnosticsInterval);
+        diagnosticsInterval = null;
+    }
+    clearMdnsFallbackTimer();
+}
+
+function startMdnsFallbackTimer() {
+    if (mDnsFallbackTimer) return; // already active
+    
+    console.warn('[Diagnostics] ICE Checking/Disconnected stall detected. Starting 6-second mDNS/LAN watchdog timer...');
+    mDnsFallbackTimer = setTimeout(() => {
+        if (!forceRelayMode) {
+            console.error('[Diagnostics] ICE connection stalled for 6s. Assuming local mDNS/firewall block. Retrying with FORCED RELAY (TURN-only) mode.');
+            forceRelayMode = true;
+            
+            // Destroy peer immediately and retry
+            destroyPeer();
+            resetRetryCount();
+            if (currentRole === 'receiver') {
+                initReceiver(currentTargetId);
+            } else {
+                initSender();
+            }
+        }
+    }, 6000);
+}
+
+function clearMdnsFallbackTimer() {
+    if (mDnsFallbackTimer) {
+        clearTimeout(mDnsFallbackTimer);
+        mDnsFallbackTimer = null;
+    }
+}
+
+async function updateDiagnosticsUI(pc = null) {
+    if (!pc && conn && conn.peerConnection) {
+        pc = conn.peerConnection;
+    }
+
+    const t = translations[currentLang];
+    
+    // 1. Policy & Global state
+    if (dom.diagTransportPolicy) {
+        dom.diagTransportPolicy.textContent = forceRelayMode ? t.diag_policy_relay : t.diag_policy_all;
+    }
+    
+    if (dom.diagSigState) {
+        if (peer) {
+            dom.diagSigState.textContent = peer.disconnected ? 'disconnected' : 'stable';
+        } else {
+            dom.diagSigState.textContent = 'null';
+        }
+    }
+
+    if (!pc) {
+        if (dom.diagIceState) dom.diagIceState.textContent = 'disconnected';
+        if (dom.diagConnType) {
+            dom.diagConnType.textContent = 'None';
+            dom.diagConnType.style.color = '';
+        }
+        // Reset candidate badges
+        if (dom.badgeHost) dom.badgeHost.className = 'badge inactive';
+        if (dom.badgeSrflx) dom.badgeSrflx.className = 'badge inactive';
+        if (dom.badgeRelay) dom.badgeRelay.className = 'badge inactive';
+        return;
+    }
+
+    // 2. Set current States
+    if (dom.diagIceState) dom.diagIceState.textContent = pc.iceConnectionState;
+    if (dom.diagSigState) dom.diagSigState.textContent = pc.signalingState;
+
+    // 3. Gathered Candidate Types parsing via WebRTC Stats
+    try {
+        const stats = await pc.getStats();
+        let activeLocalType = null;
+        let activeRemoteType = null;
+        
+        gatheredCandidates = { host: false, srflx: false, relay: false };
+
+        stats.forEach(report => {
+            // Check gathered candidate types
+            if (report.type === 'local-candidate') {
+                if (report.candidateType) {
+                    gatheredCandidates[report.candidateType] = true;
+                }
+            }
+            
+            // Check active pair
+            if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
+                const localReport = stats.get(report.localCandidateId);
+                const remoteReport = stats.get(report.remoteCandidateId);
+                if (localReport) activeLocalType = localReport.candidateType;
+                if (remoteReport) activeRemoteType = remoteReport.remoteCandidateType || remoteReport.candidateType;
+            }
+        });
+
+        // Toggle badges
+        if (dom.badgeHost) dom.badgeHost.className = `badge ${gatheredCandidates.host ? 'active' : 'inactive'}`;
+        if (dom.badgeSrflx) dom.badgeSrflx.className = `badge ${gatheredCandidates.srflx ? 'active' : 'inactive'}`;
+        if (dom.badgeRelay) dom.badgeRelay.className = `badge ${gatheredCandidates.relay ? 'active' : 'inactive'}`;
+
+        // Set Connection Type label
+        if (dom.diagConnType) {
+            if (activeLocalType === 'relay' || activeRemoteType === 'relay') {
+                dom.diagConnType.textContent = 'Relayed (TURN)';
+                dom.diagConnType.style.color = 'var(--secondary)';
+            } else if (activeLocalType && activeRemoteType) {
+                dom.diagConnType.textContent = 'Direct (P2P)';
+                dom.diagConnType.style.color = 'var(--success)';
+            } else {
+                dom.diagConnType.textContent = 'None';
+                dom.diagConnType.style.color = '';
+            }
+        }
+    } catch (e) {
+        console.warn('[Diagnostics] Stats error:', e);
+    }
 }
