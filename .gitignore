@@ -1,0 +1,3 @@
+# Ignorar documentación técnica interna y guía de agentes
+okf/
+.agents/
